@@ -50,3 +50,9 @@ Git 수행 권한: 기본은 소스 수정과 검증만, 커밋·병합은 루�
 - Web: `cd web && npm run lint`, `npx --no-install tsc --noEmit`, `npm run build`. 화면 변경은 해당 화면의 데스크톱·모바일 동작을 확인한다.
 - 환경 제한으로 실패한 검증은 성공으로 기록하지 않는다. 공통 API 계약은 `plan.md`와 구현/OpenAPI가 일치하도록 루트가 조율한다.
 - 서브에이전트는 루트 오케스트레이터 절차를 재귀 실행하거나 하위 에이전트를 생성하지 않는다.
+
+## 병합 전 추적 파일 확인
+
+- 커밋 전에 `git ls-files --others --ignored --exclude-standard -- api/src web/src`로 소스가 ignore 규칙에 숨지 않았는지 확인한다.
+- `out/`라는 이름은 Java 포트·어댑터 패키지에서도 사용한다. Next.js 출력 제외는 `/web/out/`처럼 경로를 한정한다.
+- 테스트에 사용한 모든 소스가 커밋에 포함됐는지 확인한 후에만 worktree를 삭제한다.

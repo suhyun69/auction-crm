@@ -4,7 +4,8 @@
 **/data/
 **/node_modules/
 **/.next/
-**/out/
+# Java port/out 및 adapter/out 소스는 제외하지 않는다.
+/web/out/
 **/coverage/
 *.tsbuildinfo
 *.log
