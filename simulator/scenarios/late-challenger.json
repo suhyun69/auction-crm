@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "뒤늦게 나타난 큰손",
+  "seed": "late-challenger",
+  "durationMs": 60000,
+  "tickMs": 1000,
+  "minIncrement": 1000,
+  "participants": [
+    { "id": "early-a", "name": "신중한 서연", "budget": 80000, "personality": "cautious", "joinAtMs": 0 },
+    { "id": "early-b", "name": "경쟁자 도윤", "budget": 150000, "personality": "competitive", "joinAtMs": 3000 },
+    { "id": "middle", "name": "기회를 보는 수빈", "budget": 120000, "personality": "impulsive", "joinAtMs": 10000 },
+    { "id": "late", "name": "늦게 온 지우", "budget": 400000, "personality": "competitive", "joinAtMs": 30000 }
+  ]
+}
