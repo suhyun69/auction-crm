@@ -124,3 +124,8 @@ SSE 연결 준비 시 `ready`, 새 응찰 커밋 후 `dashboard-changed`, 유휴
 
 - [010-scenario-engine.md](ticket/010-scenario-engine.md): 기존 경매 API를 호출하는 JSON 시나리오와 Node 기반 가상 참가자 엔진.
 - 예산·성향·입장·반응 속도, 가상 시간/배속/일시정지, 난수 시드, 결과 기록을 제공한다. 실제 경매와 dry-run을 구분하고 기존 API·웹·DB 운영 흐름을 보존한다.
+
+## 추가 티켓: 웹 시뮬레이터 제어
+
+- [011-web-simulator.md](ticket/011-web-simulator.md): /simulator에서 시나리오 선택·시작·일시정지/재개·중지·배속·참가자별 상태를 조작한다.
+- 기존 엔진을 단일 Next Node 서버의 메모리 세션으로 재사용하며 여러 탭의 상태와 실행 대상을 동기화한다. 실제 경매/독립 미리보기를 구분하고 기존 CLI와 API를 보존한다.

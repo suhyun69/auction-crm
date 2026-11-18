@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "두 사람의 짧은 승부",
+  "seed": 17,
+  "durationMs": 20000,
+  "tickMs": 500,
+  "minIncrement": 1000,
+  "participants": [
+    { "id": "duel-a", "name": "승부사 민서", "budget": 30000, "personality": "competitive", "joinAtMs": 0 },
+    { "id": "duel-b", "name": "도전자 준호", "budget": 50000, "personality": "impulsive", "joinAtMs": 2000 }
+  ]
+}
