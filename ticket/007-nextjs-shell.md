@@ -1,6 +1,6 @@
 # 007 — Next.js 프로젝트와 화면 골격
 
-- 상태: TODO
+- 상태: IN_PROGRESS
 - 담당: web
 - 배정·리뷰·병합: 루트 에이전트
 - 계획: [plan.md](../plan.md)
