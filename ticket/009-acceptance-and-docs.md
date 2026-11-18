@@ -1,6 +1,6 @@
 # 009 — 전체 흐름 검증과 실행 문서
 
-- 상태: TODO
+- 상태: IN_PROGRESS
 - 담당: 루트
 - 배정·리뷰·병합: 루트 에이전트
 - 계획: [plan.md](../plan.md)
@@ -35,8 +35,8 @@
 
 ## 결과 기록
 
-- 변경 요약: 미작성
-- 검증 명령 및 결과: 미실행
-- 미해결 사항: 미작성
+- 변경 요약: 전체 수용 검증·실행 문서와 정상 SSE 종료 처리 완성
+- 검증 명령 및 결과: API ./gradlew test bootJar:105개 통과. web 독립npmci/lint0/tsc/test5/기본원점webpack production build 통과. scripts/verify_acceptance.py 실HTTP25건·동시20·동일키동시10·두SSE각25이벤트·파일DB재시작동일snapshot/최초응답보존 PASS. 정상disconnect 응답보존/ERROR부재검증. 문서·안전성리뷰/diff/ignore 통과.
+- 미해결 사항: 없음
 - 작업 커밋: 미작성
 - 병합 결과/커밋: 미작성 (병합 후 기록)
