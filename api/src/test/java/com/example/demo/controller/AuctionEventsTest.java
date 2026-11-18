@@ -100,6 +100,28 @@ class AuctionEventsTest {
     }
 
     @Test
+    void clientDisconnectCleansUpWithoutUnexpectedErrorLog() throws Exception {
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(
+                com.example.demo.common.web.GlobalExceptionHandler.class);
+        AtomicInteger errors = new AtomicInteger();
+        var appender = new ch.qos.logback.core.AppenderBase<ch.qos.logback.classic.spi.ILoggingEvent>() {
+            @Override protected void append(ch.qos.logback.classic.spi.ILoggingEvent event) {
+                if (event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.ERROR)) errors.incrementAndGet();
+            }
+        };
+        appender.start(); logger.addAppender(appender);
+        try {
+            Stream stream = connect();
+            assertThat(stream.next()).isEqualTo("ready");
+            stream.close();
+            await().atMost(Duration.ofSeconds(4)).until(() -> events.subscriberCount() == 0);
+            await().during(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).until(() -> errors.get() == 0);
+        } finally {
+            logger.detachAppender(appender); appender.stop();
+        }
+    }
+
+    @Test
     void allowedOriginHeadersAndRejectedOriginPreflightAreScoped() throws Exception {
         for (String path : List.of("/api/bid", "/api/dashboard", "/api/events")) {
             var allowed = client.send(HttpRequest.newBuilder(uri(path)).method("OPTIONS", HttpRequest.BodyPublishers.noBody())

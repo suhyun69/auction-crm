@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -77,6 +78,12 @@ public class GlobalExceptionHandler {
         log.warn("처리되지 않은 IllegalArgumentException: {}", e.getMessage());
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of(400, ErrorCode.INVALID_INPUT.getTitle(), e.getMessage()));
+    }
+
+    /** 종료된 비동기 응답에는 상태나 JSON을 다시 쓰지 않는다. */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleDisconnectedResponse(AsyncRequestNotUsableException e) {
+        log.debug("비동기 응답 연결 종료: {}", e.getMessage());
     }
 
     /** 마지막 안전망. 내부 메시지를 그대로 노출하지 않는다. */
