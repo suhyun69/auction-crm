@@ -69,6 +69,20 @@ npm run dev
 
 통합 실행은 Ctrl+C 한 번으로 종료한다. 통합 명령은 SSE 정상 종료 대기를 기본 5초로 제한하며, `SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE`로 조정할 수 있다. 개별 API 실행은 열린 SSE 연결 때문에 종료 시 최대 약 30초 기다릴 수 있다. 개발 데이터는 실행마다 초기화되므로 유지할 데이터를 개발 DB에 두지 않는다. 데이터·빌드 산출물·환경 비밀 파일은 Git에서 제외한다.
 
+## 가상 참가자 시뮬레이터
+
+```bash
+# API 없이 자동 응찰 미리보기
+npm run simulate:demo
+
+# 실행 중인 API에 가상 참가자로 응찰
+npm run simulate -- --speed 4
+```
+
+참가자별 예산·성향·입장 시각·반응 간격은 JSON으로 정의한다. 실행 중 `pause`, `resume`, `speed 4`, `status`, `stop`을 입력할 수 있다. 실제 실행은 기존 경매에 응찰을 추가하며 DB를 초기화하지 않는다. API가 8081이면 `--api http://localhost:8081`을 지정한다.
+
+상세 설정·결과 저장·시드 재현 범위는 [시뮬레이터 문서](simulator/README.md)를 참조한다. 테스트는 `npm run test:simulator`로 실행한다.
+
 ## 응찰 API
 
 ```bash
