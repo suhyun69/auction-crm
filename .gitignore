@@ -1,0 +1,13 @@
+.DS_Store
+**/.gradle/
+**/build/
+**/data/
+**/node_modules/
+**/.next/
+**/out/
+**/coverage/
+*.tsbuildinfo
+*.log
+.env*
+!.env.example
+!**/.env.example
