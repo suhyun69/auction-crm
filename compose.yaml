@@ -1,4 +1,7 @@
-# 개발용 PostgreSQL. 데이터 디렉터리를 tmpfs에 두어 컨테이너를 다시 만들 때마다 빈 DB로 시작한다.
+# 실행 방법 두 가지
+# - `npm run dev`: 이 파일의 db만 띄우고 API·웹은 로컬 개발 서버로 실행한다(코드 수정 즉시 반영).
+# - `docker compose up --build`: db·api·web을 모두 컨테이너로 실행한다(JDK·Node 설치 불필요).
+# DB 데이터는 tmpfs에만 있어 컨테이너가 멈추거나 다시 만들어지면 항상 빈 DB로 시작한다.
 name: auction-crm
 
 services:
@@ -13,7 +16,32 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U auction -d auction"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U auction -d auction"]
       interval: 1s
       timeout: 3s
       retries: 30
+
+  api:
+    build: ./api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/auction
+      DB_USERNAME: auction
+      DB_PASSWORD: auction
+      AUCTION_WEB_ALLOWED_ORIGINS: http://localhost:${WEB_PORT:-3000}
+      SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 5s
+    ports:
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+
+  web:
+    build:
+      context: ./web
+      args:
+        # 브라우저가 호스트에서 API에 접근하므로 호스트 기준 주소를 빌드에 넣는다.
+        NEXT_PUBLIC_API_ORIGIN: http://localhost:${API_PORT:-8080}
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
