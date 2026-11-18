@@ -13,7 +13,7 @@ JDK 21, Node.js 20.9 이상, npm, Docker(Compose v2 포함, 예: Docker Desktop)
 
 ## 로컬 실행
 
-Docker를 실행해 둔 상태에서, 저장소 루트에서 웹 의존성을 처음 한 번 설치한 뒤 다음 명령으로 PostgreSQL·API·웹을 함께 실행한다.
+저장소 루트에서 웹 의존성을 처음 한 번 설치한 뒤 다음 명령으로 Docker·PostgreSQL·API·웹을 함께 실행한다. Docker가 꺼져 있으면 Docker Desktop을 자동으로 켜고 준비될 때까지 기다린다(기본 120초, `DOCKER_START_TIMEOUT_MS`로 조정).
 
 ```bash
 npm --prefix web ci
@@ -30,7 +30,7 @@ API_PORT=8081 WEB_PORT=3001 DB_PORT=5433 npm run dev
 
 `NEXT_PUBLIC_API_ORIGIN`이나 `AUCTION_WEB_ALLOWED_ORIGINS`를 명령 실행 환경에서 직접 지정하면 그 값을 우선한다. 통합 실행의 웹 API 주소는 `.env.local`보다 우선한다. Turbopack 사용이 제한된 환경에서는 `npm run dev -- --webpack`으로 실행한다. 두 서버 로그는 `[api]`, `[web]` 접두사로 구분한다.
 
-개별 실행도 가능하다. API를 따로 띄울 때는 먼저 DB를 준비한다. `npm run db:up`도 기존 컨테이너를 지우고 빈 DB로 새로 만든다. 끝나면 `npm run db:down`으로 정리한다.
+개별 실행도 가능하다. API를 따로 띄울 때는 Docker를 켠 상태에서 먼저 DB를 준비한다. `npm run db:up`도 기존 컨테이너를 지우고 빈 DB로 새로 만든다. 끝나면 `npm run db:down`으로 정리한다.
 
 ```bash
 # DB (저장소 루트)

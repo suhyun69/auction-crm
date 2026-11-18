@@ -33,6 +33,35 @@ function compose(args, env, stdio = 'inherit') {
   return execFileSync('docker', ['compose', ...args], { cwd: root, env, stdio, encoding: 'utf8' });
 }
 
+function dockerReady(env) {
+  try { execFileSync('docker', ['info'], { env, stdio: 'ignore', timeout: 10000 }); return true; }
+  catch { return false; }
+}
+
+// Docker 데몬이 꺼져 있으면 Docker Desktop을 켜고 응답할 때까지 기다린다.
+async function ensureDocker(env) {
+  try { compose(['version'], env, 'ignore'); }
+  catch { throw new Error('Docker Compose를 찾을 수 없습니다. Docker Desktop을 설치하세요.'); }
+  if (dockerReady(env)) return;
+  console.log('[dev] Docker가 꺼져 있어 Docker Desktop을 시작합니다.');
+  let launched = false;
+  try { execFileSync('docker', ['desktop', 'start', '--detach'], { env, stdio: 'ignore', timeout: 30000 }); launched = true; }
+  catch { /* 구버전 Docker Desktop은 desktop 명령이 없다. */ }
+  if (!launched && process.platform === 'darwin') {
+    try { execFileSync('open', ['-a', 'Docker'], { stdio: 'ignore' }); launched = true; }
+    catch { /* 아래에서 안내한다. */ }
+  }
+  if (!launched) throw new Error('Docker를 자동으로 시작할 수 없습니다. Docker 데몬을 직접 실행하세요.');
+  const timeoutMs = Number(env.DOCKER_START_TIMEOUT_MS ?? 120000);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (stopping) return;
+    if (dockerReady(env)) { console.log('[dev] Docker가 준비되었습니다.'); return; }
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  throw new Error(`Docker가 ${Math.round(timeoutMs / 1000)}초 안에 준비되지 않았습니다. Docker Desktop 상태를 확인하세요.`);
+}
+
 // 컨테이너와 tmpfs 데이터를 함께 제거한다. 다음 실행은 항상 빈 DB에서 시작한다.
 function removeDb(env = process.env) {
   compose(['down', '--volumes', '--remove-orphans'], env, ['ignore', 'ignore', 'inherit']);
@@ -98,10 +127,8 @@ try {
   const dbPort = port(process.env.DB_PORT ?? '5432', 'DB_PORT');
   if (new Set([apiPort, webPort, dbPort]).size !== 3) throw new Error('API_PORT, WEB_PORT, DB_PORT는 서로 달라야 합니다.');
   const env = { ...process.env, DB_PORT: String(dbPort) };
-  try { compose(['version'], env, 'ignore'); }
-  catch { throw new Error('Docker Compose를 실행할 수 없습니다. Docker Desktop을 설치·실행하세요.'); }
-  try { compose(['ps', '-q'], env, 'ignore'); }
-  catch { throw new Error('Docker 데몬에 연결할 수 없습니다. Docker Desktop을 실행하세요.'); }
+  await ensureDocker(env);
+  if (stopping) throw new Error('시작 중 종료 요청을 받았습니다.');
   // 이전 실행이 남긴 컨테이너를 먼저 지워야 DB 포트 검사가 정확하다.
   removeDb(env);
   await Promise.all([checkPort(apiPort), checkPort(webPort), checkPort(dbPort)]);
