@@ -43,3 +43,11 @@ logging:
     root: INFO
     com.example.demo: DEBUG
     org.hibernate.SQL: DEBUG
+
+# 브라우저에서 직접 접근할 웹 원점만 허용한다. 여러 원점은 쉼표로 구분한다.
+auction:
+  web:
+    allowed-origins: ${AUCTION_WEB_ALLOWED_ORIGINS:http://localhost:3000}
+  events:
+    heartbeat-ms: ${AUCTION_EVENTS_HEARTBEAT_MS:15000}
+    timeout-ms: ${AUCTION_EVENTS_TIMEOUT_MS:1800000}
