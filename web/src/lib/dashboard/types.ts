@@ -17,4 +17,4 @@ export type DashboardData = {
   participants: Participant[];
 };
 
-export type ConnectionStatus = "demo" | "connecting" | "connected" | "reconnecting" | "disconnected";
+export type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "disconnected";
