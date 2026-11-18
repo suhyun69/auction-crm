@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "퇴근 후 작은 경매장",
+  "seed": 42,
+  "durationMs": 60000,
+  "tickMs": 1000,
+  "minIncrement": 1000,
+  "participants": [
+    { "id": "minseo", "name": "김민서", "budget": 80000, "personality": "cautious", "joinAtMs": 0 },
+    { "id": "junho", "name": "이준호", "budget": 180000, "personality": "competitive", "joinAtMs": 2000 },
+    { "id": "seoyeon", "name": "박서연", "budget": 120000, "personality": "impulsive", "joinAtMs": 5000 },
+    { "id": "doyun", "name": "최도윤", "budget": 250000, "personality": "competitive", "joinAtMs": 12000 },
+    { "id": "soobin", "name": "정수빈", "budget": 60000, "personality": "cautious", "joinAtMs": 18000 },
+    { "id": "jiwoo", "name": "윤지우", "budget": 350000, "personality": "impulsive", "joinAtMs": 25000 }
+  ]
+}
