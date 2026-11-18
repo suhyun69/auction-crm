@@ -2,7 +2,7 @@ import { formatAmount, formatNumber, formatTime } from "@/lib/dashboard/format";
 import type { ConnectionStatus, DashboardData } from "@/lib/dashboard/types";
 
 const connectionLabels: Record<ConnectionStatus, string> = {
-  demo: "미리보기", connecting: "연결 중", connected: "실시간 연결됨",
+  connecting: "연결 중", connected: "실시간 연결됨",
   reconnecting: "다시 연결 중", disconnected: "연결 끊김",
 };
 
@@ -28,6 +28,8 @@ export function DashboardView({ data, loading = false, error, connectionStatus, 
           <span className="status-dot" />{connectionLabels[connectionStatus]}
         </span>
       </header>
+
+      {(connectionStatus === "reconnecting" || connectionStatus === "disconnected") && <div className="connection-banner" role="status"><span>실시간 연결이 끊겼습니다. {data ? "마지막으로 확인한 현황을 표시합니다." : connectionStatus === "reconnecting" ? "자동으로 다시 연결하고 있습니다." : "연결을 다시 시도해 주세요."}</span>{onRetry && <button className="secondary-button" onClick={onRetry}>연결 다시 시도</button>}</div>}
 
       {error && <div className="error-banner" role="alert">
         <div><strong>현황을 불러오지 못했습니다.</strong><p>{error}</p></div>

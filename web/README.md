@@ -12,18 +12,19 @@ npm run dev
 
 기본 주소는 http://localhost:3000 입니다. worktree별 포트를 분리할 때는 `npm run dev -- --port 18707`을 사용합니다.
 
-현재 007 화면은 **예시 데이터 미리보기**입니다. 실제 API 호출이나 응찰 등록은 수행하지 않습니다. 상단의 화면 상태 선택으로 기본 현황, 응찰 없음, 로딩, 오류, 긴 이름·큰 금액, 재연결 표현을 확인할 수 있습니다. 고객 이름과 금액 등 표시 타입은 `src/lib/dashboard/types.ts`, 재사용 가능한 화면은 `src/components/dashboard/dashboard-view.tsx`에 있습니다.
+메인 화면은 실제 API 데이터를 조회합니다. 응찰 등록은 외부 시스템이 API로 수행하며 대시보드는 현황을 표시합니다. API를 먼저 실행하세요. 고객 이름과 금액 등 표시 타입은 `src/lib/dashboard/types.ts`, 화면은 `src/components/dashboard/dashboard-view.tsx`에 있습니다. `fixtures.ts`는 개발 참고 자료이며 메인 화면에 포함되지 않습니다.
 
 ## API 연결 설정
 
-008에서 브라우저는 `NEXT_PUBLIC_API_ORIGIN`(기본 `http://localhost:8080`)의 `GET /api/dashboard`를 직접 조회하고 `GET /api/events`에 EventSource로 직접 SSE 연결합니다. Next.js API 프록시는 사용하지 않습니다. 서버 내부 호스트명이 아닌 **브라우저에서 접근 가능한 원점**을 설정해야 합니다.
+브라우저는 `NEXT_PUBLIC_API_ORIGIN`(기본 `http://localhost:8080`)의 `GET /api/dashboard`를 직접 조회하고 `GET /api/events`에 EventSource로 직접 SSE 연결합니다. Next.js API 프록시는 사용하지 않습니다. 서버 내부 호스트명이 아닌 **브라우저에서 접근 가능한 원점**을 설정해야 합니다.
 
-API의 허용 CORS 원점에 실제 웹 주소(예: `http://localhost:3000` 또는 worktree 포트)를 등록합니다. HTTPS 웹에서는 API도 HTTPS로 제공해야 합니다. `NEXT_PUBLIC_` 값은 브라우저 번들에 포함되므로 비밀 값을 넣지 않습니다. 실행 또는 빌드 후 값을 바꾸면 재시작/재빌드합니다. SSE `ready`와 재연결 후 전체 조회, `dashboard-changed` 수신 후 재조회는 008에서 구현합니다.
+API의 허용 CORS 원점에 실제 웹 주소(예: `http://localhost:3000` 또는 worktree 포트)를 등록합니다. HTTPS 웹에서는 API도 HTTPS로 제공해야 합니다. `NEXT_PUBLIC_` 값은 브라우저 번들에 포함되므로 비밀 값을 넣지 않습니다. 실행 또는 빌드 후 값을 바꾸면 재시작/재빌드합니다. 최초 진입, SSE 연결/`ready`와 재연결 후 전체 조회하며, `dashboard-changed` 수신 시 재조회합니다. 동시에 하나의 조회만 수행해 응답 순서를 보장하며, 진행 중인 조회에 변경이 오면 응답을 반영한 뒤 후속 조회하여 최신 상태를 복원합니다. 연속 변경은 하나의 후속 조회로 합칩니다. 조회 실패 시 마지막 데이터와 재시도 버튼을 표시하며, 연결 복구 시 최신 데이터를 다시 가져옵니다. 화면을 떠나면 HTTP 요청과 SSE 연결 및 타이머를 정리합니다.
 
 ## 검증 및 프로덕션 실행
 
 ```bash
 npm run lint
+npm test
 npx --no-install tsc --noEmit
 npm run build
 npm run start

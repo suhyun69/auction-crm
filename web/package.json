@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsc src/lib/dashboard/live-dashboard.ts src/lib/dashboard/api.ts src/lib/dashboard/types.ts --module commonjs --target es2022 --outDir .test-build --skipLibCheck && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "next": "16.4.6",
