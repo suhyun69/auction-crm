@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Run isolated HTTP/SSE/concurrency/persistence checks against the built API jar.
 
-Uses only Python's standard library and a temporary file DB, never api/data.
+Uses only Python's standard library and a throwaway PostgreSQL container
+(tmpfs data, removed afterwards), never the `npm run dev` database. Docker is required.
 Build first: cd api && ./gradlew bootJar
 Run from root: python3 scripts/verify_acceptance.py
 """
@@ -83,6 +84,38 @@ class Events:
             self.response.close()
 
 
+POSTGRES_IMAGE = 'postgres:17.5-alpine'
+
+
+def start_postgres():
+    """Start a disposable PostgreSQL on a random local port; it lives across API restarts."""
+    container = subprocess.run([
+        'docker', 'run', '--detach', '--rm', '--tmpfs', '/var/lib/postgresql/data',
+        '--publish', '127.0.0.1::5432', '--env', 'POSTGRES_DB=auction',
+        '--env', 'POSTGRES_USER=auction', '--env', 'POSTGRES_PASSWORD=auction', POSTGRES_IMAGE,
+    ], check=True, capture_output=True, text=True).stdout.strip()
+    try:
+        published = subprocess.run(['docker', 'port', container, '5432/tcp'],
+                                   check=True, capture_output=True, text=True).stdout
+        db_port = published.splitlines()[0].rsplit(':', 1)[1]
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            # TCP 확인까지 해야 초기화 중 임시 서버가 아닌 실제 서버가 준비된 것이다.
+            ready = subprocess.run(['docker', 'exec', container, 'pg_isready', '-h', '127.0.0.1',
+                                    '-U', 'auction', '-d', 'auction'], capture_output=True)
+            if ready.returncode == 0:
+                return container, db_port
+            time.sleep(0.5)
+        raise RuntimeError('PostgreSQL startup timed out')
+    except Exception:
+        stop_postgres(container)
+        raise
+
+
+def stop_postgres(container):
+    subprocess.run(['docker', 'rm', '--force', container], capture_output=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--jar', type=Path, help='Built Spring Boot executable jar')
@@ -98,6 +131,9 @@ def main():
         parser.error('Java 21 or newer is required; configure JAVA_HOME.')
     origin = 'http://127.0.0.1:' + str(available_port())
     port = origin.rsplit(':', 1)[1]
+    if not shutil.which('docker'):
+        parser.error('Docker is required for the PostgreSQL acceptance database.')
+    container, db_port = start_postgres()
 
     with tempfile.TemporaryDirectory(prefix='auction-crm-acceptance-') as temp:
         folder = Path(temp)
@@ -109,8 +145,8 @@ def main():
             nonlocal process
             process = subprocess.Popen([
                 java, '-jar', str(jar), '--server.port=' + port,
-                '--spring.datasource.url=jdbc:h2:file:' + str(folder / 'auction') + ';DB_CLOSE_ON_EXIT=FALSE',
-                '--server.shutdown=immediate', '--spring.h2.console.enabled=false',
+                '--spring.datasource.url=jdbc:postgresql://127.0.0.1:' + db_port + '/auction',
+                '--server.shutdown=immediate',
                 '--logging.level.root=WARN', '--logging.level.com.example.demo=INFO',
                 '--logging.level.org.hibernate.SQL=OFF',
             ], cwd=folder, stdout=log, stderr=subprocess.STDOUT)
@@ -200,6 +236,7 @@ def main():
             for stream in streams:
                 stream.close_after_server_stop()
             log.close()
+            stop_postgres(container)
 
 
 if __name__ == '__main__':

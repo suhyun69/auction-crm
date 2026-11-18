@@ -4,33 +4,38 @@
 
 ## 구성과 환경
 
-- `api/`: Java 21, Spring Boot, JPA, H2. 기존 헥사고날 구조와 ArchUnit 규칙을 유지한다.
+- `api/`: Java 21, Spring Boot, JPA, PostgreSQL(개발, Docker), 인메모리 H2(자동 테스트). 기존 헥사고날 구조와 ArchUnit 규칙을 유지한다.
 - `web/`: Next.js App Router, React, TypeScript, Tailwind CSS.
 - `plan.md`, `ticket/`: API 계약·작업 범위·티켓별 검증 및 병합 기록.
 - `AGENTS.md`, `.codex/agents/`: 루트와 web/api 담당자의 작업 지침.
 
-JDK 21, Node.js 20.9 이상, npm이 필요하다. 실제 검증 환경은 JDK 21.0.10 / Node 26.8.1 / npm 11.19.0이다. Gradle은 저장소 wrapper를 사용하고 웹 의존성은 npm lockfile로 설치한다. 통합 검증 스크립트는 Python 3.9 이상 표준 라이브러리만 사용한다.
+JDK 21, Node.js 20.9 이상, npm, Docker(Compose v2 포함, 예: Docker Desktop)가 필요하다. 실제 검증 환경은 JDK 21.0.10 / Node 26.8.1 / npm 11.19.0이다. Gradle은 저장소 wrapper를 사용하고 웹 의존성은 npm lockfile로 설치한다. 통합 검증 스크립트는 Python 3.9 이상 표준 라이브러리만 사용한다.
 
 ## 로컬 실행
 
-저장소 루트에서 웹 의존성을 처음 한 번 설치한 뒤, 다음 명령으로 API와 웹을 함께 실행한다.
+Docker를 실행해 둔 상태에서, 저장소 루트에서 웹 의존성을 처음 한 번 설치한 뒤 다음 명령으로 PostgreSQL·API·웹을 함께 실행한다.
 
 ```bash
 npm --prefix web ci
 npm run dev
 ```
 
-Ctrl+C로 두 서버와 자식 프로세스를 함께 정리한다. 한 서버가 실패하거나 종료돼도 다른 서버를 종료한다. 통합 명령은 macOS/Linux에서 동작하며 추가 npm 패키지는 필요 없다. macOS에서 `JAVA_HOME`이 없으면 설치된 JDK 21을 자동으로 선택한다.
+`npm run dev`는 루트 [`compose.yaml`](compose.yaml)의 PostgreSQL 컨테이너를 먼저 제거하고 새로 만든 뒤 API와 웹을 띄운다. DB 데이터는 컨테이너의 tmpfs에만 있으므로 **실행할 때마다 빈 DB에서 시작**한다. Ctrl+C로 두 서버와 자식 프로세스, DB 컨테이너를 함께 정리한다. 한 서버가 실패하거나 종료돼도 다른 서버를 종료한다. 통합 명령은 macOS/Linux에서 동작하며 추가 npm 패키지는 필요 없다. macOS에서 `JAVA_HOME`이 없으면 설치된 JDK 21을 자동으로 선택한다.
 
 포트를 바꾸면 웹 API 주소와 API의 CORS 원점도 기본값을 함께 맞춘다.
 
 ```bash
-API_PORT=8081 WEB_PORT=3001 npm run dev
+API_PORT=8081 WEB_PORT=3001 DB_PORT=5433 npm run dev
 ```
 
 `NEXT_PUBLIC_API_ORIGIN`이나 `AUCTION_WEB_ALLOWED_ORIGINS`를 명령 실행 환경에서 직접 지정하면 그 값을 우선한다. 통합 실행의 웹 API 주소는 `.env.local`보다 우선한다. Turbopack 사용이 제한된 환경에서는 `npm run dev -- --webpack`으로 실행한다. 두 서버 로그는 `[api]`, `[web]` 접두사로 구분한다.
 
-개별 실행도 가능하다.
+개별 실행도 가능하다. API를 따로 띄울 때는 먼저 DB를 준비한다. `npm run db:up`도 기존 컨테이너를 지우고 빈 DB로 새로 만든다. 끝나면 `npm run db:down`으로 정리한다.
+
+```bash
+# DB (저장소 루트)
+npm run db:up
+```
 
 ```bash
 # API 터미널
@@ -50,7 +55,7 @@ npm run dev
 
 최초에는 0건과 빈 참가자 목록을 표시한다. 아래 POST 예제를 실행하면 새로고침 없이 카드와 순위가 바뀐다. 화면에는 응찰 입력 폼이 없으며 외부 시스템이 API로 응찰한다.
 
-통합 실행은 Ctrl+C 한 번으로 종료한다. 통합 명령은 SSE 정상 종료 대기를 기본 5초로 제한하며, `SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE`로 조정할 수 있다. 개별 API 실행은 열린 SSE 연결 때문에 종료 시 최대 약 30초 기다릴 수 있다. 개발 데이터는 `api/data/`의 파일 H2에 남아 재시작해도 유지된다. 데이터·빌드 산출물·환경 비밀 파일은 Git에서 제외한다.
+통합 실행은 Ctrl+C 한 번으로 종료한다. 통합 명령은 SSE 정상 종료 대기를 기본 5초로 제한하며, `SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE`로 조정할 수 있다. 개별 API 실행은 열린 SSE 연결 때문에 종료 시 최대 약 30초 기다릴 수 있다. 개발 데이터는 실행마다 초기화되므로 유지할 데이터를 개발 DB에 두지 않는다. 데이터·빌드 산출물·환경 비밀 파일은 Git에서 제외한다.
 
 ## 응찰 API
 
@@ -104,14 +109,16 @@ curl -N http://localhost:8080/api/events
 |---|---|---|
 | 웹 `NEXT_PUBLIC_API_ORIGIN` | `http://localhost:8080` | 브라우저에서 접근할 API 원점 |
 | API `SERVER_PORT` | `8080` | API 포트 |
-| API `SPRING_DATASOURCE_URL` | 파일 H2 `./data/demo` | DB URL |
+| `DB_PORT` | `5432` | 호스트에 공개할 PostgreSQL 포트(compose와 API가 함께 사용) |
+| API `DB_URL` | `jdbc:postgresql://localhost:${DB_PORT}/auction` | DB URL |
+| API `DB_USERNAME` / `DB_PASSWORD` | `auction` / `auction` | 개발 DB 계정 |
 | API `AUCTION_WEB_ALLOWED_ORIGINS` | `http://localhost:3000` | 허용 웹 원점, 여러 값은 쉼표로 구분 |
 | API `AUCTION_EVENTS_HEARTBEAT_MS` | `15000` | SSE heartbeat 간격 |
 | API `AUCTION_EVENTS_TIMEOUT_MS` | `1800000` | SSE 연결 timeout, 이후 자동 재연결 |
 
 웹의 `.env.local`을 바꾼 뒤 개발 서버를 재시작한다. `NEXT_PUBLIC_*`는 브라우저 번들에 포함되므로 프로덕션에서는 **빌드할 때** 값을 설정하고 변경 시 다시 빌드한다. 브라우저가 API에 직접 접근하므로 웹 주소를 API의 CORS 허용 원점과 일치시켜야 한다. 호스트를 `127.0.0.1`로 바꾸거나 웹 포트를 바꾼 경우도 해당 원점을 허용 목록에 추가한다.
 
-worktree마다 API/웹 포트와 파일 DB 경로를 분리한다. API는 `./gradlew bootRun --args='--server.port=8081 --spring.datasource.url=jdbc:h2:file:/tmp/auction-example/db'`, 웹은 `npm run dev -- --port 3001`처럼 지정할 수 있다. 이 경우 웹 API 원점은 8081, API 허용 웹 원점은 `http://localhost:3001`로 설정한다.
+worktree마다 API/웹/DB 포트를 분리한다. Compose 프로젝트 이름도 worktree마다 달라야 컨테이너가 겹치지 않는다. 예: `COMPOSE_PROJECT_NAME=auction-crm-007 API_PORT=8081 WEB_PORT=3001 DB_PORT=5433 npm run dev`. 이 경우 웹 API 원점은 8081, API 허용 웹 원점은 `http://localhost:3001`로 자동 설정된다.
 
 ## 자동 검증
 
@@ -131,7 +138,7 @@ npm run build -- --webpack
 
 일반 환경에서는 `npm run build`도 사용할 수 있다. 이 작업 환경은 Turbopack 내부 포트 사용을 제한하므로 공식 `--webpack` 옵션으로 프로덕션 빌드를 검증했다. 시스템 글꼴을 사용해 Google Fonts 다운로드는 필요 없다. 빌드 후 `npm start`로 웹을 실행할 수 있다.
 
-저장소 루트에서 실행하는 다음 스크립트는 별도 포트·임시 파일 H2·자체 API 프로세스를 사용한다. 개발 DB에 접근하지 않고 종료 시 임시 데이터를 정리한다.
+저장소 루트에서 실행하는 다음 스크립트는 별도 포트·임시 PostgreSQL 컨테이너·자체 API 프로세스를 사용한다(Docker 필요). 개발 DB에 접근하지 않고 종료 시 컨테이너를 제거한다.
 
 ```bash
 python3 scripts/verify_acceptance.py

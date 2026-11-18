@@ -1,0 +1,19 @@
+# 개발용 PostgreSQL. 데이터 디렉터리를 tmpfs에 두어 컨테이너를 다시 만들 때마다 빈 DB로 시작한다.
+name: auction-crm
+
+services:
+  db:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_DB: auction
+      POSTGRES_USER: auction
+      POSTGRES_PASSWORD: auction
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auction -d auction"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
