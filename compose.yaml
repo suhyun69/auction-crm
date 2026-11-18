@@ -37,10 +37,15 @@ services:
 
   web:
     build:
-      context: ./web
+      # 웹이 루트의 simulator/를 import하므로 루트를 컨텍스트로 쓴다(web/Dockerfile.dockerignore 참고).
+      context: .
+      dockerfile: web/Dockerfile
       args:
         # 브라우저가 호스트에서 API에 접근하므로 호스트 기준 주소를 빌드에 넣는다.
         NEXT_PUBLIC_API_ORIGIN: http://localhost:${API_PORT:-8080}
+    environment:
+      # 시뮬레이터는 웹 서버(컨테이너 안)에서 API를 호출하므로 컨테이너 네트워크 주소를 쓴다.
+      SIMULATOR_API_ORIGIN: http://api:8080
     depends_on:
       - api
     ports:
