@@ -16,13 +16,15 @@ public class BidService {
     private final ParticipantRepositoryPort participants;
     private final BidRepositoryPort bids;
     private final Clock clock;
+    private final AuctionEventsPort events;
 
     public BidService(AuctionRepositoryPort auctions, ParticipantRepositoryPort participants,
-                      BidRepositoryPort bids, Clock clock) {
+                      BidRepositoryPort bids, Clock clock, AuctionEventsPort events) {
         this.auctions = auctions;
         this.participants = participants;
         this.bids = bids;
         this.clock = clock;
+        this.events = events;
     }
 
     public Bid submit(String rawName, long rawAmount, String key) {
@@ -54,6 +56,7 @@ public class BidService {
             auction.linkHighestBid(saved.id());
             auctions.save(auction);
         }
+        events.publishAfterCommit();
         return saved;
     }
 }
