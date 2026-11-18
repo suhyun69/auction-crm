@@ -1,0 +1,7 @@
+{
+  "name": "auction-crm",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev.mjs"
+  }
+}

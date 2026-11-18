@@ -13,19 +13,34 @@ JDK 21, Node.js 20.9 이상, npm이 필요하다. 실제 검증 환경은 JDK 21
 
 ## 로컬 실행
 
-첫 번째 터미널에서 API를 실행한다. JDK가 여러 개면 먼저 `JAVA_HOME`을 JDK 21 설치 경로로 설정한다.
+저장소 루트에서 웹 의존성을 처음 한 번 설치한 뒤, 다음 명령으로 API와 웹을 함께 실행한다.
 
 ```bash
+npm --prefix web ci
+npm run dev
+```
+
+Ctrl+C로 두 서버와 자식 프로세스를 함께 정리한다. 한 서버가 실패하거나 종료돼도 다른 서버를 종료한다. 통합 명령은 macOS/Linux에서 동작하며 추가 npm 패키지는 필요 없다. macOS에서 `JAVA_HOME`이 없으면 설치된 JDK 21을 자동으로 선택한다.
+
+포트를 바꾸면 웹 API 주소와 API의 CORS 원점도 기본값을 함께 맞춘다.
+
+```bash
+API_PORT=8081 WEB_PORT=3001 npm run dev
+```
+
+`NEXT_PUBLIC_API_ORIGIN`이나 `AUCTION_WEB_ALLOWED_ORIGINS`를 명령 실행 환경에서 직접 지정하면 그 값을 우선한다. 통합 실행의 웹 API 주소는 `.env.local`보다 우선한다. Turbopack 사용이 제한된 환경에서는 `npm run dev -- --webpack`으로 실행한다. 두 서버 로그는 `[api]`, `[web]` 접두사로 구분한다.
+
+개별 실행도 가능하다.
+
+```bash
+# API 터미널
 cd api
 ./gradlew bootRun
 ```
 
-두 번째 터미널에서 웹을 실행한다.
-
 ```bash
+# 웹 터미널
 cd web
-npm ci
-cp .env.example .env.local
 npm run dev
 ```
 
@@ -35,7 +50,7 @@ npm run dev
 
 최초에는 0건과 빈 참가자 목록을 표시한다. 아래 POST 예제를 실행하면 새로고침 없이 카드와 순위가 바뀐다. 화면에는 응찰 입력 폼이 없으며 외부 시스템이 API로 응찰한다.
 
-각 서버는 해당 터미널에서 Ctrl+C로 종료한다. 열린 SSE 연결이 있으면 Spring의 정상 종료가 최대 약 30초 기다릴 수 있다. 개발 데이터는 `api/data/`의 파일 H2에 남아 재시작해도 유지된다. 데이터·빌드 산출물·환경 비밀 파일은 Git에서 제외한다.
+통합 실행은 Ctrl+C 한 번으로 종료한다. 통합 명령은 SSE 정상 종료 대기를 기본 5초로 제한하며, `SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE`로 조정할 수 있다. 개별 API 실행은 열린 SSE 연결 때문에 종료 시 최대 약 30초 기다릴 수 있다. 개발 데이터는 `api/data/`의 파일 H2에 남아 재시작해도 유지된다. 데이터·빌드 산출물·환경 비밀 파일은 Git에서 제외한다.
 
 ## 응찰 API
 
