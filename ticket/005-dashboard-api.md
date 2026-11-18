@@ -1,6 +1,6 @@
 # 005 — 대시보드 요약과 순위 조회
 
-- 상태: IN_PROGRESS
+- 상태: DONE
 - 담당: api
 - 배정·리뷰·병합: 루트 에이전트
 - 계획: [plan.md](../plan.md)
@@ -11,20 +11,20 @@
 
 ## 목표와 작업 범위
 
-- [ ] GET /api/dashboard에 summary와 participants를 반환한다. 초기 버전은 소규모 경매 기준 전체 목록이다.
-- [ ] summary는 bidCount, participantCount, highestAmount, highestBidderName을 제공한다.
-- [ ] 각 행은 participantId, customerName, rank, highestAcceptedAmount, bidCount, lastBidAt을 제공한다.
-- [ ] 승인된 개인 최고가 내림차순, 승인 이력이 없는 참가자는 뒤에 배치한다. 동률은 최초 참가 시각과 ID 오름차순으로 고정한다. rank는 1부터 연속 부여한다.
-- [ ] 빈 최고가는 0, 최고가 고객과 개인 승인 금액은 해당 값이 없으면 null이다. 시각은 UTC ISO 8601로 반환한다.
-- [ ] 요약과 목록은 같은 DB 스냅샷에서 조회해 응찰 진행 중에도 서로 모순되지 않게 한다.
+- [x] GET /api/dashboard에 summary와 participants를 반환한다. 초기 버전은 소규모 경매 기준 전체 목록이다.
+- [x] summary는 bidCount, participantCount, highestAmount, highestBidderName을 제공한다.
+- [x] 각 행은 participantId, customerName, rank, highestAcceptedAmount, bidCount, lastBidAt을 제공한다.
+- [x] 승인된 개인 최고가 내림차순, 승인 이력이 없는 참가자는 뒤에 배치한다. 동률은 최초 참가 시각과 ID 오름차순으로 고정한다. rank는 1부터 연속 부여한다.
+- [x] 빈 최고가는 0, 최고가 고객과 개인 승인 금액은 해당 값이 없으면 null이다. 시각은 UTC ISO 8601로 반환한다.
+- [x] 요약과 목록은 같은 DB 스냅샷에서 조회해 응찰 진행 중에도 서로 모순되지 않게 한다.
 
 ## 완료 기준과 검증
 
-- [ ] 빈 상태, 재응찰, 기각만 있는 참가자, 정렬·집계·null 값을 통합 테스트한다.
-- [ ] 동시 쓰기 중 요약과 목록의 일관성을 검증한다.
-- [ ] 선행 티켓이 반영된 최신 통합 브랜치 기준으로 검증했다.
-- [ ] 변경 요약과 검증 결과를 아래에 기록하고 작업 내용을 커밋했다.
-- [ ] 통합 브랜치에 병합 후 관련 회귀 검사를 확인했다.
+- [x] 빈 상태, 재응찰, 기각만 있는 참가자, 정렬·집계·null 값을 통합 테스트한다.
+- [x] 동시 쓰기 중 요약과 목록의 일관성을 검증한다.
+- [x] 선행 티켓이 반영된 최신 통합 브랜치 기준으로 검증했다.
+- [x] 변경 요약과 검증 결과를 아래에 기록하고 작업 내용을 커밋했다.
+- [x] 통합 브랜치에 병합 후 관련 회귀 검사를 확인했다.
 
 ## 작업 절차
 
@@ -39,5 +39,5 @@
 - 변경 요약: 대시보드 요약과 참가자 순위 조회 구현
 - 검증 명령 및 결과: 전체 ./gradlew test 98개 통과. 단일 SQL 실행1회,40회 동시쓰기·80회조회 일관성, 빈상태·순위·null·UTC 검증. 별도리뷰 문제없음, diff/ignore 검사 통과.
 - 미해결 사항: 없음
-- 작업 커밋: 미작성
-- 병합 결과/커밋: 미작성 (병합 후 기록)
+- 작업 커밋: `571757f`
+- 병합 결과/커밋: `master`에 --no-ff 병합 완료 (`f4c371f`). 병합 트리와 검증 트리의 구현 소스가 동일함을 확인.
