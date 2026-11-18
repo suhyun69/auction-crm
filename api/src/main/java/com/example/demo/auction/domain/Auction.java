@@ -9,6 +9,7 @@ public final class Auction {
     private final long id;
     private BidAmount highestAmount;
     private CustomerName highestBidderName;
+    private Long highestBidId;
 
     private Auction(long id, BidAmount highestAmount, CustomerName highestBidderName) {
         if (id < 1 || (highestAmount == null) != (highestBidderName == null)) {
@@ -27,10 +28,29 @@ public final class Auction {
         return new Auction(id, highestAmount, highestBidderName);
     }
 
+    public static Auction reconstitute(long id, BidAmount amount, CustomerName name, Long bidId) {
+        Auction auction = new Auction(id, amount, name);
+        if (bidId != null && (bidId < 1 || amount == null)) {
+            throw new IllegalArgumentException("최고 응찰 참조가 유효하지 않습니다.");
+        }
+        auction.highestBidId = bidId;
+        return auction;
+    }
+
+    public void linkHighestBid(long bidId) {
+        if (bidId < 1 || highestAmount == null) {
+            throw new IllegalArgumentException("최고 응찰 참조가 유효하지 않습니다.");
+        }
+        highestBidId = bidId;
+    }
+
+    public Long getHighestBidId() { return highestBidId; }
+
     public BidDecision bid(CustomerName customerName, BidAmount amount) {
         Objects.requireNonNull(customerName, "customerName");
         Objects.requireNonNull(amount, "amount");
         if (highestAmount == null || amount.value() > highestAmount.value()) {
+            highestBidId = null;
             highestAmount = amount;
             highestBidderName = customerName;
             return new BidDecision(BidStatus.ACCEPTED, BidReason.NEW_HIGHEST_BID,
