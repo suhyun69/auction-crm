@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsc src/lib/dashboard/live-dashboard.ts src/lib/dashboard/api.ts src/lib/dashboard/types.ts --module commonjs --target es2022 --outDir .test-build --skipLibCheck && tsc src/lib/simulator/client.ts src/lib/simulator/types.ts src/lib/simulator/request.ts --module commonjs --target es2022 --outDir .test-build/simulator --skipLibCheck && node --test tests/*.test.mjs"
+    "test": "tsc src/lib/dashboard/live-dashboard.ts src/lib/dashboard/api.ts src/lib/dashboard/types.ts --module commonjs --target es2022 --outDir .test-build --skipLibCheck && tsc src/lib/simulator/client.ts src/lib/simulator/types.ts src/lib/simulator/request.ts src/lib/simulator/setup.ts src/lib/simulator/history.ts --module commonjs --target es2022 --outDir .test-build/simulator --skipLibCheck && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "next": "16.4.6",

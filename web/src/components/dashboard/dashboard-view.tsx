@@ -13,9 +13,12 @@ type Props = {
   connectionStatus: ConnectionStatus;
   changedParticipantIds?: number[];
   onRetry?: () => void;
+  /** 현재 시뮬레이션에 참여 중인 이름. 이 행만 상세를 열 수 있다. */
+  simulationNames?: Set<string>;
+  onSelectParticipant?: (customerName: string) => void;
 };
 
-export function DashboardView({ data, loading = false, error, connectionStatus, changedParticipantIds = [], onRetry }: Props) {
+export function DashboardView({ data, loading = false, error, connectionStatus, changedParticipantIds = [], onRetry, simulationNames, onSelectParticipant }: Props) {
   return (
     <>
       <header className="page-header">
@@ -55,9 +58,13 @@ export function DashboardView({ data, loading = false, error, connectionStatus, 
             {data.participants.map((participant) => {
               const leading = participant.rank === 1 && participant.highestAcceptedAmount !== null;
               const changed = changedParticipantIds.includes(participant.participantId);
+              const simulated = !!onSelectParticipant && !!simulationNames?.has(participant.customerName.trim());
+              const nameContent = <><span className="avatar" aria-hidden="true">{participant.customerName.slice(0, 1)}</span><div className="name-content"><span className="name-text">{participant.customerName}</span>{leading && <span className="leader-badge">최고가</span>}{participant.highestAcceptedAmount === null && <span className="no-accepted">승인 이력 없음</span>}{simulated && <span className="simulated-badge">시뮬레이션</span>}</div></>;
               return <li key={participant.participantId} className={`participant-row ${leading ? "is-leading" : ""} ${changed ? "is-changed" : ""}`} data-participant-id={participant.participantId}>
                 <span className="rank" aria-label={`${participant.rank}위`}>{String(participant.rank).padStart(2, "0")}</span>
-                <div className="participant-name"><span className="avatar" aria-hidden="true">{participant.customerName.slice(0, 1)}</span><div className="name-content"><span className="name-text">{participant.customerName}</span>{leading && <span className="leader-badge">최고가</span>}{participant.highestAcceptedAmount === null && <span className="no-accepted">승인 이력 없음</span>}</div></div>
+                {simulated
+                  ? <button type="button" className="participant-name participant-open" onClick={() => onSelectParticipant(participant.customerName)} aria-label={`${participant.customerName} 시뮬레이션 설정과 응찰 시도 내역 보기`}>{nameContent}</button>
+                  : <div className="participant-name">{nameContent}</div>}
                 <div className="participant-amount"><span className="mobile-label">최고 승인 금액</span><strong>{formatAmount(participant.highestAcceptedAmount)}</strong></div>
                 <div className="participant-count"><span className="mobile-label">응찰</span><span>{formatNumber(participant.bidCount)}회</span></div>
                 <time className="participant-time" dateTime={participant.lastBidAt}><span className="mobile-label">마지막 응찰</span>{formatTime(participant.lastBidAt)}</time>

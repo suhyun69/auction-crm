@@ -7,6 +7,12 @@ export class SimulationControlError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
 }
 
+/** 화면에서 직접 구성한 시나리오가 차지하는 예약 ID와 인원 상한. */
+export const CUSTOM_SCENARIO_ID = 'custom';
+export const MAX_CUSTOM_PARTICIPANTS = 12;
+/** 화면이 참가자별 응찰 시도 내역을 복원할 수 있을 만큼만 보관한다. */
+export const MAX_RUN_EVENTS = 200;
+
 function speedValue(value) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > 1000) {
     throw new SimulationControlError('배속은 0 초과 1000 이하의 숫자여야 합니다.');
@@ -23,6 +29,7 @@ export class SimulationSession {
     const ids = new Set();
     this.scenarios = scenarios.map(entry => {
       if (typeof entry.id !== 'string' || !entry.id || ids.has(entry.id)) throw new Error('시나리오 ID는 비어 있지 않고 고유해야 합니다.');
+      if (entry.id === CUSTOM_SCENARIO_ID) throw new Error(`'${CUSTOM_SCENARIO_ID}'는 직접 구성한 시나리오의 예약 ID입니다.`);
       ids.add(entry.id);
       return { id: entry.id, description: String(entry.description ?? ''), scenario: parseScenario(entry.scenario) };
     });
@@ -30,10 +37,14 @@ export class SimulationSession {
     this.sessionId = randomUUID();
     this.revision = 0;
     this.run = null;
+    this.custom = null;
   }
 
+  /** 준비된 시나리오 + 가장 최근에 직접 구성한 시나리오. 같은 목록을 조회와 실행이 함께 본다. */
+  definitions() { return this.custom ? [...this.scenarios, this.custom] : this.scenarios; }
+
   getSnapshot() {
-    const scenarios = this.scenarios.map(({ id, description, scenario }) => ({
+    const scenarios = this.definitions().map(({ id, description, scenario }) => ({
       id, description, name: scenario.name, durationMs: scenario.durationMs, tickMs: scenario.tickMs,
       seed: scenario.seed, participantCount: scenario.participants.length,
       participants: scenario.participants.map(({ id, name, budget, personality, joinAtMs }) => ({ id, name, budget, personality, joinAtMs })),
@@ -88,12 +99,32 @@ export class SimulationSession {
     return this.getSnapshot();
   }
 
+  /** 직접 구성한 시나리오는 저장된 목록을 바꾸지 않고 custom 자리 하나만 대체한다. */
+  resolve(input) {
+    if (input.scenario === undefined) {
+      const found = this.definitions().find(entry => entry.id === input.scenarioId);
+      if (!found) throw new SimulationControlError('시나리오를 선택하세요.');
+      return found;
+    }
+    if (!input.scenario || typeof input.scenario !== 'object' || Array.isArray(input.scenario)) {
+      throw new SimulationControlError('참가자 설정이 올바르지 않습니다.');
+    }
+    if (Array.isArray(input.scenario.participants) && input.scenario.participants.length > MAX_CUSTOM_PARTICIPANTS) {
+      throw new SimulationControlError(`참가자는 ${MAX_CUSTOM_PARTICIPANTS}명까지 설정할 수 있습니다.`);
+    }
+    let scenario;
+    try { scenario = parseScenario(input.scenario); }
+    catch (error) { throw new SimulationControlError(`설정을 확인해 주세요. ${error.message}`); }
+    this.custom = { id: CUSTOM_SCENARIO_ID, description: '화면에서 직접 구성한 참가자로 실행합니다.', scenario };
+    return this.custom;
+  }
+
   start(input) {
     if (this.run?.taskActive) throw new SimulationControlError('진행 중인 실행을 먼저 중지하세요.', 409);
-    const definition = this.scenarios.find(entry => entry.id === input.scenarioId);
-    if (!definition) throw new SimulationControlError('시나리오를 선택하세요.');
     if (!['live', 'dry-run'].includes(input.mode)) throw new SimulationControlError('실제 경매 또는 미리보기를 선택하세요.');
+    // 저장된 custom 자리를 바꾸기 전에 나머지 입력을 모두 검증한다.
     const speed = speedValue(input.speed ?? 1);
+    const definition = this.resolve(input);
     const current = {
       scenarioId: definition.id, mode: input.mode, speed, durationMs: definition.scenario.durationMs,
       paused: false, inStep: false, stopping: false, taskActive: true, events: [],
@@ -101,10 +132,9 @@ export class SimulationSession {
     };
     const client = current.mode === 'dry-run' ? createDryRunClient() : this.createClient();
     current.engine = new SimulationEngine(definition.scenario, { client, runId: randomUUID(), onEvent: event => {
-      if (event.type !== 'attempt') {
-        current.events.push(event);
-        if (current.events.length > 100) current.events.shift();
-      }
+      // attempt 기록은 응답을 받지 못한 응찰을 사후에 대조할 유일한 단서다.
+      current.events.push(event);
+      if (current.events.length > MAX_RUN_EVENTS) current.events.shift();
       this.revision++;
     } });
     this.run = current;

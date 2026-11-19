@@ -1,10 +1,5 @@
 import type { SimulationCommand, SimulatorSnapshot } from "./types";
 
-export function shouldSyncSimulationSelection(previous: SimulatorSnapshot | null, next: SimulatorSnapshot) {
-  const active = (snapshot: SimulatorSnapshot | null) => !!snapshot?.run && ["running", "pausing", "paused", "stopping"].includes(snapshot.run.phase);
-  return !previous || previous.sessionId !== next.sessionId || previous.run?.runId !== next.run?.runId || active(previous) || active(next);
-}
-
 type Callbacks = {
   onSnapshot: (snapshot: SimulatorSnapshot) => void;
   onError: (message: string | null) => void;

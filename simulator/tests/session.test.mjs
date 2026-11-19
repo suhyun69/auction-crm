@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SimulationSession } from '../session.mjs';
+import { CUSTOM_SCENARIO_ID, MAX_CUSTOM_PARTICIPANTS, MAX_RUN_EVENTS, SimulationSession } from '../session.mjs';
 import { createDryRunClient } from '../clients.mjs';
 
 const scenario = { name: 'Session test', seed: 42, durationMs: 1000, tickMs: 10, minIncrement: 1,
@@ -64,7 +64,7 @@ test('dry-run never uses real client and can complete then start a fresh run', a
   await until(() => s.getSnapshot().run.phase === 'completed');
   const result = s.getSnapshot().run;
   assert.ok(result.totals.accepted > 0); assert.equal(result.elapsedMs, 1000);
-  assert.equal(result.unresolvedAttempts, 0); assert.ok(result.events.length <= 100);
+  assert.equal(result.unresolvedAttempts, 0); assert.ok(result.events.length <= MAX_RUN_EVENTS);
   assert.ok(result.finishedAt);
   const next = start(s, { speed: 1000 });
   assert.notEqual(next.run.runId, first.run.runId);
@@ -142,4 +142,58 @@ test('delayed control from a previous run or server session cannot mutate a new 
   assert.throws(() => restarted.command({ action: 'start', sessionId: old.sessionId, runId: null, scenarioId: 'test', mode: 'dry-run' }), errorStatus(409));
   assert.equal(restarted.getSnapshot().run, null);
   assert.throws(() => s.command({ action: 'stop' }), errorStatus(400));
+});
+
+test('화면에서 직접 구성한 시나리오로 실행하고 목록에 custom 한 자리만 유지한다', async t => {
+  const s = session(t);
+  const custom = { ...scenario, name: '직접 구성한 경매',
+    participants: [{ ...scenario.participants[0], id: 'c1', name: 'C1', budget: 500 }, { ...scenario.participants[1], id: 'c2', name: 'C2', budget: 900 }] };
+  const snapshot = command(s, { action: 'start', scenario: custom, mode: 'dry-run', speed: 1 });
+  assert.equal(snapshot.run.scenarioId, CUSTOM_SCENARIO_ID);
+  assert.deepEqual(snapshot.run.participants.map(actor => [actor.name, actor.budget]), [['C1', 500], ['C2', 900]]);
+  assert.deepEqual(snapshot.scenarios.map(entry => entry.id), ['test', CUSTOM_SCENARIO_ID]);
+
+  await until(() => s.getSnapshot().run.phase === 'completed');
+  const again = command(s, { action: 'start', scenario: { ...custom, participants: [custom.participants[0]] }, mode: 'dry-run', speed: 1 });
+  assert.deepEqual(again.scenarios.map(entry => entry.id), ['test', CUSTOM_SCENARIO_ID]);
+  assert.equal(again.run.participants.length, 1);
+  // 저장된 custom 자리는 조회와 scenarioId 재실행이 같은 정의를 본다.
+  assert.equal(s.getSnapshot().scenarios.at(-1).participantCount, 1);
+});
+
+test('잘못된 직접 구성 시나리오는 400으로 거부하고 저장된 설정을 바꾸지 않는다', async t => {
+  const s = session(t);
+  const custom = { ...scenario, participants: [{ ...scenario.participants[0], id: 'c1', name: 'C1' }, { ...scenario.participants[1], id: 'c2', name: 'C2' }] };
+  command(s, { action: 'start', scenario: custom, mode: 'dry-run', speed: 1 });
+  await until(() => s.getSnapshot().run.phase === 'completed');
+  const saved = s.getSnapshot().scenarios.at(-1);
+
+  const tooMany = { ...custom, participants: Array.from({ length: MAX_CUSTOM_PARTICIPANTS + 1 },
+    (_, index) => ({ ...custom.participants[0], id: `x${index}`, name: `X${index}` })) };
+  for (const input of [{ scenario: tooMany }, { scenario: { ...custom, participants: [] } }, { scenario: [] },
+      { scenario: { ...custom, participants: [{ ...custom.participants[0], budget: 0 }] } },
+      { scenario: custom, mode: 'nope' }, { scenario: custom, speed: 0 }]) {
+    assert.throws(() => command(s, { action: 'start', mode: 'dry-run', speed: 1, ...input }), errorStatus(400));
+  }
+  assert.deepEqual(s.getSnapshot().scenarios.at(-1), saved);
+  assert.throws(() => command(s, { action: 'start', scenarioId: 'missing', mode: 'dry-run', speed: 1 }), errorStatus(400));
+});
+
+test('custom은 준비된 시나리오가 쓸 수 없는 예약 ID다', () => {
+  assert.throws(() => new SimulationSession({ scenarios: [{ id: CUSTOM_SCENARIO_ID, scenario }], createClient: () => createDryRunClient() }),
+    /예약 ID/);
+});
+
+test('실행 기록은 attempt를 포함해 보관 한도 안에서 유지된다', async t => {
+  const s = session(t);
+  start(s, { speed: 1000 });
+  await until(() => s.getSnapshot().run.phase === 'completed');
+  const { events } = s.getSnapshot().run;
+  assert.ok(events.length <= MAX_RUN_EVENTS);
+  const attempts = events.filter(event => event.type === 'attempt');
+  const bids = events.filter(event => event.type === 'bid');
+  assert.ok(attempts.length > 0, 'attempt 기록이 남는다');
+  // 같은 키로 시도와 결과를 이을 수 있어야 참가자별 내역을 복원한다.
+  for (const bid of bids) assert.ok(attempts.some(attempt => attempt.idempotencyKey === bid.idempotencyKey));
+  for (const attempt of attempts) assert.ok(attempt.participantId && attempt.amount > 0);
 });
