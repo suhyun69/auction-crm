@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CUSTOM_SCENARIO_ID, MAX_CUSTOM_PARTICIPANTS, MAX_RUN_EVENTS, SimulationSession } from '../session.mjs';
+import { CUSTOM_SCENARIO_ID, MAX_BIDS_PER_PARTICIPANT, MAX_CUSTOM_PARTICIPANTS, MAX_RUN_EVENTS, SimulationSession } from '../session.mjs';
 import { createDryRunClient } from '../clients.mjs';
 
 const scenario = { name: 'Session test', seed: 42, durationMs: 1000, tickMs: 10, minIncrement: 1,
@@ -196,4 +196,24 @@ test('실행 기록은 attempt를 포함해 보관 한도 안에서 유지된다
   // 같은 키로 시도와 결과를 이을 수 있어야 참가자별 내역을 복원한다.
   for (const bid of bids) assert.ok(attempts.some(attempt => attempt.idempotencyKey === bid.idempotencyKey));
   for (const attempt of attempts) assert.ok(attempt.participantId && attempt.amount > 0);
+});
+
+test('참가자별 보관으로 먼저 이탈한 참가자의 기록도 남는다', async t => {
+  const s = session(t);
+  start(s, { speed: 1000 });
+  await until(() => s.getSnapshot().run.phase === 'completed');
+  const { events, participants } = s.getSnapshot().run;
+  const attemptsOf = id => events.filter(event => event.participantId === id && event.type === 'attempt');
+
+  const retired = participants.find(actor => actor.state === 'retired' && actor.bidCount > 0);
+  assert.ok(retired, '예산이 작은 참가자가 먼저 이탈한다');
+  // 전체 길이로만 잘랐다면 먼저 멈춘 참가자의 기록이 통째로 밀려났을 자리다.
+  assert.ok(attemptsOf(retired.id).length > 0, '이탈한 참가자의 시도 기록이 남는다');
+
+  for (const actor of participants) {
+    const keys = new Set(attemptsOf(actor.id).map(event => event.idempotencyKey));
+    assert.ok(keys.size <= MAX_BIDS_PER_PARTICIPANT, `${actor.name} 기록이 참가자 상한 안에 있다`);
+  }
+  assert.ok(events.filter(event => event.type === 'attempt').every(event => Number.isSafeInteger(event.highestAmount)),
+    'attempt에 판단 근거였던 당시 최고가가 들어 있다');
 });

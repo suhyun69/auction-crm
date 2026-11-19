@@ -22,6 +22,8 @@ export function ParticipantDetailDialog({ participant, events, onClose }: Props)
   const closeRef = useRef<HTMLButtonElement>(null);
   const attempts = bidHistory(events, participant.id);
   const counts = countOutcomes(attempts);
+  // 응찰 횟수는 엔진이 세고 내역은 보관 한도가 있다. 오래된 기록이 밀려나면 둘이 어긋난다.
+  const dropped = Math.max(0, participant.bidCount - (counts.accepted + counts.rejected));
 
   useEffect(() => { closeRef.current?.focus(); }, []);
   useEffect(() => {
@@ -61,12 +63,16 @@ export function ParticipantDetailDialog({ participant, events, onClose }: Props)
             <div className="setup-section-head">
               <h3 id="detail-history-title">응찰 시도 내역</h3>
               <span className="count-badge">
-                시도 {attempts.length} · 승인 {counts.accepted} · 기각 {counts.rejected}
+                {dropped > 0 ? `최근 ${attempts.length}건` : `시도 ${attempts.length}`} · 승인 {counts.accepted} · 기각 {counts.rejected}
                 {counts.unresolved > 0 && ` · 응답 없음 ${counts.unresolved}`}
               </span>
             </div>
             {attempts.length === 0 ? (
-              <div className="detail-empty">아직 응찰을 시도하지 않았습니다.</div>
+              <div className="detail-empty">
+                {participant.bidCount > 0
+                  ? `응찰 ${participant.bidCount}회를 마쳤지만 보관 한도를 넘어 기록이 남아 있지 않습니다.`
+                  : "아직 응찰을 시도하지 않았습니다."}
+              </div>
             ) : (
               <ol className="detail-history">
                 {[...attempts].reverse().map((attempt, index) => (
@@ -75,13 +81,18 @@ export function ParticipantDetailDialog({ participant, events, onClose }: Props)
                     <span className="detail-time">{seconds(attempt.elapsedMs)}</span>
                     <strong className="detail-amount">{formatAmount(attempt.amount)}</strong>
                     <span className="detail-outcome">{outcomeLabels[attempt.outcome]}</span>
-                    <span className="detail-highest">{attempt.highestAmount === null ? "—" : `최고가 ${formatAmount(attempt.highestAmount)}`}</span>
+                    <span className="detail-highest">
+                      당시 최고가 {attempt.highestBefore === null ? "—" : formatAmount(attempt.highestBefore)}
+                      {attempt.outcome === "REJECTED" && attempt.highestAfter !== null
+                        && <small>앞선 금액 {formatAmount(attempt.highestAfter)}</small>}
+                    </span>
                   </li>
                 ))}
               </ol>
             )}
             {counts.unresolved > 0 && <p className="unresolved-note">응답을 확인하지 못한 시도가 있습니다. 실제 경매에 저장됐는지 대시보드에서 확인해 주세요.</p>}
-            <p className="setup-note">보관 한도를 넘은 오래된 기록은 표시되지 않을 수 있습니다.</p>
+            {dropped > 0 && attempts.length > 0 && <p className="setup-note">이전 응찰 {dropped}회는 보관 한도를 넘어 표시되지 않습니다.</p>}
+            <p className="setup-note">당시 최고가는 이 참가자가 응찰을 결정할 때 보고 있던 금액입니다.</p>
           </section>
         </div>
 

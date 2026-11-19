@@ -5,7 +5,10 @@ export type BidAttempt = {
   elapsedMs: number;
   amount: number;
   outcome: BidOutcome;
-  highestAmount: number | null;
+  /** 응찰을 결정할 때 보고 있던 최고가. */
+  highestBefore: number | null;
+  /** 판정 직후의 최고가. 승인이면 응찰 금액과 같고, 기각이면 자신을 앞선 금액이다. */
+  highestAfter: number | null;
   idempotencyKey?: string;
 };
 
@@ -26,15 +29,19 @@ export function bidHistory(events: SimulationEvent[], participantId: string): Bi
         elapsedMs: event.elapsedMs,
         amount: event.amount ?? 0,
         outcome: "UNRESOLVED",
-        highestAmount: null,
+        highestBefore: null,
+        highestAfter: null,
         idempotencyKey: event.idempotencyKey,
       });
       order.push(key);
     }
     const attempt = attempts.get(key)!;
+    if (event.type === "attempt" && event.highestAmount !== undefined) {
+      attempt.highestBefore = event.highestAmount;
+    }
     if (event.type === "bid" && event.response) {
       attempt.outcome = event.response.status;
-      attempt.highestAmount = event.response.highestAmount;
+      attempt.highestAfter = event.response.highestAmount;
       if (event.amount !== undefined) attempt.amount = event.amount;
     }
   }

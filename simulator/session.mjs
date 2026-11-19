@@ -10,8 +10,35 @@ export class SimulationControlError extends Error {
 /** 화면에서 직접 구성한 시나리오가 차지하는 예약 ID와 인원 상한. */
 export const CUSTOM_SCENARIO_ID = 'custom';
 export const MAX_CUSTOM_PARTICIPANTS = 12;
-/** 화면이 참가자별 응찰 시도 내역을 복원할 수 있을 만큼만 보관한다. */
-export const MAX_RUN_EVENTS = 200;
+/** 참가자마다 남기는 최근 응찰 기록 수. 일찍 이탈한 참가자의 내역도 남는다. */
+export const MAX_BIDS_PER_PARTICIPANT = 20;
+/** 예상 밖의 이벤트까지 포함한 전체 상한. */
+export const MAX_RUN_EVENTS = 1000;
+
+/**
+ * 전체 길이로만 자르면 오래된 기록이 먼저 밀려나 일찍 이탈한 참가자의 내역이 통째로 사라진다.
+ * 참가자별로 최근 응찰만 남기고, 같은 멱등 키의 attempt와 bid는 함께 버린다.
+ */
+function retain(events, event) {
+  events.push(event);
+  if (event.type === 'attempt' || event.type === 'bid') {
+    const keys = [];
+    for (const item of events) {
+      if (item.participantId !== event.participantId) continue;
+      if (item.type !== 'attempt' && item.type !== 'bid') continue;
+      if (!keys.includes(item.idempotencyKey)) keys.push(item.idempotencyKey);
+    }
+    while (keys.length > MAX_BIDS_PER_PARTICIPANT) {
+      const dropped = keys.shift();
+      for (let index = events.length - 1; index >= 0; index--) {
+        const item = events[index];
+        if (item.participantId === event.participantId && item.idempotencyKey === dropped
+            && (item.type === 'attempt' || item.type === 'bid')) events.splice(index, 1);
+      }
+    }
+  }
+  while (events.length > MAX_RUN_EVENTS) events.shift();
+}
 
 function speedValue(value) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > 1000) {
@@ -133,8 +160,7 @@ export class SimulationSession {
     const client = current.mode === 'dry-run' ? createDryRunClient() : this.createClient();
     current.engine = new SimulationEngine(definition.scenario, { client, runId: randomUUID(), onEvent: event => {
       // attempt 기록은 응답을 받지 못한 응찰을 사후에 대조할 유일한 단서다.
-      current.events.push(event);
-      if (current.events.length > MAX_RUN_EVENTS) current.events.shift();
+      retain(current.events, event);
       this.revision++;
     } });
     this.run = current;

@@ -121,7 +121,9 @@ export class SimulationEngine {
         // UTF-8 actor IDs and run IDs remain valid HTTP header values of fixed length.
         const idempotencyKey = 'sim-' + createHash('sha256')
           .update(JSON.stringify([this.runId, actor.id, actor.bidCount + 1])).digest('hex');
-        this.event('attempt', { participantId: actor.id, customerName: actor.name, amount, idempotencyKey });
+        // 판단 근거였던 최고가를 함께 남긴다. 응답의 최고가는 판정 뒤 값이라 서로 다르다.
+        this.event('attempt', { participantId: actor.id, customerName: actor.name, amount, idempotencyKey,
+          highestAmount: this.state.market.highestAmount });
         if (this.state.phase === 'stopped') return this.getState();
         this.state.totals.attempted++;
         const response = await this.client.submitBid({ customerName: actor.name, amount, idempotencyKey }, { signal });

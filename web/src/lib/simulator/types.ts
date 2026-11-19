@@ -13,6 +13,8 @@ export type RunParticipant = ScenarioParticipant & {
 export type SimulationEvent = {
   type: string; runId?: string; elapsedMs: number; tick?: number;
   participantId?: string; customerName?: string; amount?: number; reason?: string;
+  /** attempt 이벤트에서는 시도 당시의 최고가. */
+  highestAmount?: number;
   idempotencyKey?: string;
   response?: { status: "ACCEPTED" | "REJECTED"; highestAmount: number; highestBidderName: string };
 };
