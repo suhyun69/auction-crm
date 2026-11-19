@@ -68,7 +68,7 @@
 - 병합 커밋: `3bcdec2` (master --no-ff)
 - 남은 항목: 실제 Spring API·PostgreSQL로 live 모드 확인. 사용자가 `docker compose up --build`로 직접 진행 중이며, 확인되면 상태를 DONE으로 바꾼다.
 
-## 후속 수정 (병합 이후, 커밋 `8a4bb6a`)
+## 후속 수정 (병합 이후, 커밋 `b3fc3a0`)
 
 사용자 실행 중 발견한 두 가지를 고쳤다.
 
