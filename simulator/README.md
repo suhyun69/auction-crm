@@ -48,6 +48,8 @@ npm run simulate -- --scenario simulator/scenarios/standard.json --output simula
 
 Next의 `GET /api/simulator`는 시나리오 목록과 공유 실행 상태를 반환한다. `POST /api/simulator`는 `start`, `pause`, `resume`, `stop`, `speed` 명령을 받으며 조회한 `sessionId`와 `runId`(첫 실행은 null)를 함께 보낸다. `start`는 준비된 시나리오의 `scenarioId` 또는 직접 구성한 `scenario` 객체 중 하나를 받는다. 예전 실행/서버 세션에 대한 명령은 409로 거부한다. 화면이 이 정보를 자동으로 처리하므로 수동 API 호출은 필요 없다.
 
+스냅샷의 `run.traffic`은 엔진이 API를 부른 기록이다. 세션이 엔진의 클라이언트를 감싸 논리 호출 하나마다 요청 한 줄과 응답(또는 오류·취소) 한 줄을 남기며, 같은 호출은 `callId`로 잇는다. 줄마다 실행 안에서 증가하는 `seq`와 실행 시작 기준 `atMs`, 경로·참가자·금액·결과·소요 시간을 담는다. 재시도는 클라이언트 안에서 일어나므로 한 호출로 보인다. 최근 200건(`MAX_TRAFFIC_RECORDS`)만 보관하고 `seq`의 빈틈으로 밀려난 수를 알 수 있다. 참가자 내역용 `events`와 엔진 코어는 바꾸지 않는다. 대시보드의 `호출 흐름` 패널이 이 기록을 재생한다.
+
 ## 실행 제어
 
 실행 중 명령을 입력하고 Enter를 누른다.

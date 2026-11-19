@@ -134,3 +134,8 @@ SSE 연결 준비 시 `ready`, 새 응찰 커밋 후 `dashboard-changed`, 유휴
 
 - [012-dashboard-simulation-control.md](ticket/012-dashboard-simulation-control.md): 경매 대시보드에서 참가자 인원·성향·예산을 모달로 구성하고 그 구성으로 바로 실행·일시정지·중지한다.
 - 세션 `start`가 준비된 `scenarioId` 외에 직접 구성한 `scenario`를 받고 서버가 기존 규칙으로 다시 검증한다. 직접 구성한 시나리오는 예약 ID `custom` 한 자리를 차지하며 기존 /simulator 화면과 CLI 경로를 보존한다.
+
+## 추가 티켓: 시뮬레이션 호출 흐름 시각화
+
+- [013-call-flow-visualizer.md](ticket/013-call-flow-visualizer.md): 대시보드를 왼쪽 절반, Simulation Engine·API·Web 사이 호출을 CSS 3D 그림으로 재생하는 패널을 오른쪽 절반에 둔다.
+- 세션이 엔진의 API 클라이언트를 감싸 호출 기록(`run.traffic`)을 스냅샷으로 내보내고, 브라우저가 SSE 수신과 대시보드 재조회를 더한다. 엔진 코어와 기존 `events`·API는 바꾸지 않는다.

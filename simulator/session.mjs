@@ -14,6 +14,43 @@ export const MAX_CUSTOM_PARTICIPANTS = 12;
 export const MAX_BIDS_PER_PARTICIPANT = 20;
 /** 예상 밖의 이벤트까지 포함한 전체 상한. */
 export const MAX_RUN_EVENTS = 1000;
+/** 호출 흐름 화면에 내보내는 최근 API 호출 기록 수. */
+export const MAX_TRAFFIC_RECORDS = 200;
+
+/**
+ * 엔진의 API 클라이언트를 감싸 요청과 응답을 한 줄씩 남긴다. 재시도는 클라이언트 안에서 일어나므로
+ * 논리 호출 하나가 요청 한 줄과 응답(또는 오류) 한 줄이 된다. 엔진과 호출 결과에는 손대지 않는다.
+ */
+export function traceClient(client, record, now = () => performance.now()) {
+  let callId = 0;
+  async function traced(call, request, invoke) {
+    const id = ++callId;
+    const started = now();
+    record({ direction: 'request', call, callId: id, ...request });
+    try {
+      const result = await invoke();
+      const durationMs = Math.max(0, Math.round(now() - started));
+      if (call === 'bid') {
+        record({ direction: 'response', call, callId: id, customerName: request.customerName, amount: request.amount,
+          outcome: result?.status, highestAmount: result?.highestAmount, highestBidderName: result?.highestBidderName, durationMs });
+      } else {
+        record({ direction: 'response', call, callId: id, outcome: 'OK', durationMs,
+          highestAmount: result?.summary?.highestAmount, participantCount: result?.summary?.participantCount });
+      }
+      return result;
+    } catch (error) {
+      const aborted = error?.name === 'AbortError' || error?.name === 'TimeoutError';
+      record({ direction: 'response', call, callId: id, ...request, outcome: aborted ? 'ABORTED' : 'ERROR',
+        durationMs: Math.max(0, Math.round(now() - started)), message: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  }
+  return {
+    readDashboard: options => traced('read', { method: 'GET', path: '/api/dashboard' }, () => client.readDashboard(options)),
+    submitBid: (body, options) => traced('bid', { method: 'POST', path: '/api/bid', customerName: body.customerName, amount: body.amount },
+      () => client.submitBid(body, options)),
+  };
+}
 
 /**
  * 전체 길이로만 자르면 오래된 기록이 먼저 밀려나 일찍 이탈한 참가자의 내역이 통째로 사라진다.
@@ -86,7 +123,7 @@ export class SimulationSession {
       else if (['ready', 'running'].includes(phase)) phase = current.paused ? (current.inStep ? 'pausing' : 'paused') : 'running';
       run = { ...state, phase, scenarioId: current.scenarioId, mode: current.mode, speed: current.speed,
         durationMs: current.durationMs, startedAt: current.startedAt, finishedAt: current.finishedAt,
-        events: current.events, unresolvedAttempts: state.totals.attempted - state.totals.accepted - state.totals.rejected,
+        events: current.events, traffic: current.traffic, unresolvedAttempts: state.totals.attempted - state.totals.accepted - state.totals.rejected,
         ...(current.failure ? { reason: current.failure } : {}) };
     }
     return structuredClone({ sessionId: this.sessionId, revision: this.revision, scenarios, run });
@@ -154,10 +191,16 @@ export class SimulationSession {
     const definition = this.resolve(input);
     const current = {
       scenarioId: definition.id, mode: input.mode, speed, durationMs: definition.scenario.durationMs,
-      paused: false, inStep: false, stopping: false, taskActive: true, events: [],
+      paused: false, inStep: false, stopping: false, taskActive: true, events: [], traffic: [], trafficSeq: 0,
       controller: new AbortController(), wake: undefined, startedAt: new Date().toISOString(), finishedAt: null,
     };
-    const client = current.mode === 'dry-run' ? createDryRunClient() : this.createClient();
+    const base = current.mode === 'dry-run' ? createDryRunClient() : this.createClient();
+    const startedPerf = performance.now();
+    const client = traceClient(base, entry => {
+      current.traffic.push({ seq: ++current.trafficSeq, atMs: Math.round(performance.now() - startedPerf), ...entry });
+      if (current.traffic.length > MAX_TRAFFIC_RECORDS) current.traffic.shift();
+      this.revision++;
+    });
     current.engine = new SimulationEngine(definition.scenario, { client, runId: randomUUID(), onEvent: event => {
       // attempt 기록은 응답을 받지 못한 응찰을 사후에 대조할 유일한 단서다.
       retain(current.events, event);

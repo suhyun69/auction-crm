@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CUSTOM_SCENARIO_ID, MAX_BIDS_PER_PARTICIPANT, MAX_CUSTOM_PARTICIPANTS, MAX_RUN_EVENTS, SimulationSession } from '../session.mjs';
+import { CUSTOM_SCENARIO_ID, MAX_BIDS_PER_PARTICIPANT, MAX_CUSTOM_PARTICIPANTS, MAX_RUN_EVENTS, MAX_TRAFFIC_RECORDS, SimulationSession, traceClient } from '../session.mjs';
 import { createDryRunClient } from '../clients.mjs';
 
 const scenario = { name: 'Session test', seed: 42, durationMs: 1000, tickMs: 10, minIncrement: 1,
@@ -216,4 +216,44 @@ test('참가자별 보관으로 먼저 이탈한 참가자의 기록도 남는�
   }
   assert.ok(events.filter(event => event.type === 'attempt').every(event => Number.isSafeInteger(event.highestAmount)),
     'attempt에 판단 근거였던 당시 최고가가 들어 있다');
+});
+
+test('호출 기록은 요청과 응답을 짝지어 순번대로 남고 보관 한도를 지킨다', async t => {
+  const s = session(t);
+  start(s, { speed: 1000 });
+  await until(() => s.getSnapshot().run.phase === 'completed');
+  const { traffic, events } = s.getSnapshot().run;
+  assert.ok(traffic.length > 0 && traffic.length <= MAX_TRAFFIC_RECORDS);
+  for (let i = 1; i < traffic.length; i++) {
+    assert.equal(traffic[i].seq, traffic[i - 1].seq + 1, '순번은 빈틈없이 증가한다');
+    assert.ok(traffic[i].atMs >= traffic[i - 1].atMs);
+  }
+  assert.ok(traffic.at(-1).seq > MAX_TRAFFIC_RECORDS, '이 실행은 한도보다 많은 호출을 만든다');
+  assert.ok(traffic.some(item => item.call === 'read' && item.direction === 'request' && item.path === '/api/dashboard'));
+  const bidResponses = traffic.filter(item => item.call === 'bid' && item.direction === 'response');
+  assert.ok(bidResponses.length > 0);
+  for (const response of bidResponses) {
+    assert.ok(['ACCEPTED', 'REJECTED'].includes(response.outcome));
+    const request = traffic.find(item => item.callId === response.callId && item.direction === 'request');
+    if (request) assert.equal(request.amount, response.amount);
+  }
+  // 호출 기록은 참가자 내역을 위한 events와 별개다.
+  assert.ok(events.every(event => !('direction' in event)));
+});
+
+test('traceClient는 결과와 오류를 바꾸지 않고 그대로 전달한다', async () => {
+  const records = [];
+  let clock = 0;
+  const failure = new Error('API 500: down');
+  const client = traceClient({
+    async readDashboard() { clock += 7; return { summary: { highestAmount: 5, participantCount: 1 } }; },
+    async submitBid() { clock += 3; throw failure; },
+  }, entry => records.push(entry), () => clock);
+  assert.equal((await client.readDashboard()).summary.highestAmount, 5);
+  await assert.rejects(client.submitBid({ customerName: 'A', amount: 9, idempotencyKey: 'k' }), failure);
+  assert.deepEqual(records.map(item => [item.callId, item.call, item.direction, item.outcome, item.durationMs]),
+    [[1, 'read', 'request', undefined, undefined], [1, 'read', 'response', 'OK', 7],
+     [2, 'bid', 'request', undefined, undefined], [2, 'bid', 'response', 'ERROR', 3]]);
+  assert.equal(records[3].customerName, 'A');
+  assert.match(records[3].message, /down/);
 });

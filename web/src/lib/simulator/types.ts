@@ -18,12 +18,21 @@ export type SimulationEvent = {
   idempotencyKey?: string;
   response?: { status: "ACCEPTED" | "REJECTED"; highestAmount: number; highestBidderName: string };
 };
+/** 세션이 엔진의 API 클라이언트를 감싸 남기는 호출 기록. 요청 한 줄과 응답(또는 오류) 한 줄이 같은 callId를 갖는다. */
+export type TrafficRecord = {
+  seq: number; atMs: number; direction: "request" | "response"; call: "read" | "bid"; callId: number;
+  method?: string; path?: string; customerName?: string; amount?: number;
+  outcome?: "OK" | "ACCEPTED" | "REJECTED" | "ERROR" | "ABORTED";
+  highestAmount?: number; highestBidderName?: string; participantCount?: number; durationMs?: number; message?: string;
+};
 export type SimulationRun = {
   runId: string; scenarioId: string; mode: SimulationMode; phase: RunPhase; speed: number;
   elapsedMs: number; durationMs: number; tick: number;
   totals: { attempted: number; accepted: number; rejected: number; errors: number };
   market: { highestAmount: number; highestBidderName: string | null };
   participants: RunParticipant[]; events: SimulationEvent[];
+  /** 최근 API 호출 기록. 이전 서버와의 호환을 위해 없을 수 있다. */
+  traffic?: TrafficRecord[];
   reason?: string; startedAt: string; finishedAt?: string; unresolvedAttempts: number;
 };
 export type SimulatorSnapshot = { sessionId: string; revision: number; scenarios: ScenarioOption[]; run: SimulationRun | null };
