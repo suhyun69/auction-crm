@@ -7,7 +7,14 @@ type Callbacks = {
   onError: (error: string | null) => void;
   onConnection: (status: ConnectionStatus) => void;
   onChanged: (ids: number[]) => void;
+  /** 호출 흐름 화면용. SSE 수신과 대시보드 재조회의 시작·끝을 알린다. */
+  onTraffic?: (traffic: WebTraffic) => void;
 };
+
+export type WebTraffic =
+  | { kind: "sse"; name: string }
+  | { kind: "refresh"; direction: "request" }
+  | { kind: "refresh"; direction: "response"; ok: boolean; durationMs: number };
 
 function participantChanged(previous: Participant | undefined, next: Participant) {
   return !previous || previous.rank !== next.rank || previous.bidCount !== next.bidCount ||
@@ -47,8 +54,11 @@ export function createLiveDashboard(callbacks: Callbacks) {
     // A lost HTTP connection must not block later SSE invalidations indefinitely.
     requestTimer = setTimeout(() => requestController.abort(), 15000);
     callbacks.onLoading(true);
+    const started = Date.now();
+    callbacks.onTraffic?.({ kind: "refresh", direction: "request" });
     try {
       const data = await fetchDashboard(requestController.signal);
+      if (!disposed) callbacks.onTraffic?.({ kind: "refresh", direction: "response", ok: true, durationMs: Date.now() - started });
       if (!disposed) {
         const oldRows = new Map(previous?.participants.map((row) => [row.participantId, row]));
         const changed = previous ? data.participants.filter((row) => participantChanged(oldRows.get(row.participantId), row)).map((row) => row.participantId) : [];
@@ -62,6 +72,7 @@ export function createLiveDashboard(callbacks: Callbacks) {
         callbacks.onError(null);
       }
     } catch {
+      if (!disposed) callbacks.onTraffic?.({ kind: "refresh", direction: "response", ok: false, durationMs: Date.now() - started });
       if (!disposed) callbacks.onError("연결 상태를 확인한 뒤 다시 시도해 주세요.");
     } finally {
       clearTimeout(requestTimer);
@@ -74,12 +85,17 @@ export function createLiveDashboard(callbacks: Callbacks) {
     }
   }
 
+  function onEvent(event: Event) {
+    if (!disposed) callbacks.onTraffic?.({ kind: "sse", name: event.type });
+    refresh();
+  }
+
   function closeSource() {
     if (!source) return;
     source.onopen = null;
     source.onerror = null;
-    source.removeEventListener("ready", refresh);
-    source.removeEventListener("dashboard-changed", refresh);
+    source.removeEventListener("ready", onEvent);
+    source.removeEventListener("dashboard-changed", onEvent);
     source.close();
     source = null;
   }
@@ -93,8 +109,8 @@ export function createLiveDashboard(callbacks: Callbacks) {
       callbacks.onConnection("connected");
       refresh();
     };
-    source.addEventListener("ready", refresh);
-    source.addEventListener("dashboard-changed", refresh);
+    source.addEventListener("ready", onEvent);
+    source.addEventListener("dashboard-changed", onEvent);
     source.onerror = () => {
       if (!disposed) callbacks.onConnection(source?.readyState === EventSource.CLOSED ? "disconnected" : "reconnecting");
     };

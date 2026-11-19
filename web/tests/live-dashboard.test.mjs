@@ -27,11 +27,11 @@ function setup(t) {
     options.signal.addEventListener('abort', () => reject(new Error('aborted')));
     requests.push(request);
   });
-  const state = { data: [], errors: [], connections: [], changed: [], loading: [] };
+  const state = { data: [], errors: [], connections: [], changed: [], loading: [], traffic: [] };
   const client = createLiveDashboard({
     onData: value => state.data.push(value), onError: value => state.errors.push(value),
     onConnection: value => state.connections.push(value), onChanged: value => state.changed.push(value),
-    onLoading: value => state.loading.push(value),
+    onLoading: value => state.loading.push(value), onTraffic: value => state.traffic.push(value),
   });
   t.after(() => { client.dispose(); global.fetch = originalFetch; global.EventSource = originalSource; });
   return { requests, sources, state, client };
@@ -108,4 +108,18 @@ test('SSE reconnect refreshes the snapshot and retry replaces a permanently clos
   assert.equal(sources[0].readyState, 2);
   requests[2].respond(snapshot(3)); await tick();
   assert.equal(state.data.at(-1).summary.bidCount, 3);
+});
+
+test('SSE 수신과 재조회 요청·응답을 호출 흐름으로 알린다', async t => {
+  const { requests, sources, state } = setup(t);
+  await tick();
+  requests[0].respond(snapshot(1)); await tick();
+  sources[0].open(); await tick();
+  requests[1].respond(snapshot(1)); await tick();
+  state.traffic.length = 0;
+  sources[0].emit('dashboard-changed'); await tick();
+  requests[2].fail(); await tick();
+  assert.deepEqual(state.traffic.map(item => [item.kind, item.name ?? item.direction, item.ok]),
+    [['sse', 'dashboard-changed', undefined], ['refresh', 'request', undefined], ['refresh', 'response', false]]);
+  assert.ok(Number.isFinite(state.traffic[2].durationMs));
 });
