@@ -13,6 +13,7 @@ export type RunParticipant = ScenarioParticipant & {
 export type SimulationEvent = {
   type: string; runId?: string; elapsedMs: number; tick?: number;
   participantId?: string; customerName?: string; amount?: number; reason?: string;
+  idempotencyKey?: string;
   response?: { status: "ACCEPTED" | "REJECTED"; highestAmount: number; highestBidderName: string };
 };
 export type SimulationRun = {
@@ -24,7 +25,14 @@ export type SimulationRun = {
   reason?: string; startedAt: string; finishedAt?: string; unresolvedAttempts: number;
 };
 export type SimulatorSnapshot = { sessionId: string; revision: number; scenarios: ScenarioOption[]; run: SimulationRun | null };
+/** 화면에서 직접 구성해 서버로 보내는 시나리오. 서버가 다시 검증한다. */
+export type CustomScenario = {
+  version: 1; name: string; seed: string | number;
+  durationMs: number; tickMs: number; minIncrement: number;
+  participants: ScenarioParticipant[];
+};
 export type SimulationCommand =
   | { action: "start"; scenarioId: string; mode: SimulationMode; speed: number }
+  | { action: "start"; scenario: CustomScenario; mode: SimulationMode; speed: number }
   | { action: "pause" | "resume" | "stop" }
   | { action: "speed"; speed: number };

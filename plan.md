@@ -129,3 +129,8 @@ SSE 연결 준비 시 `ready`, 새 응찰 커밋 후 `dashboard-changed`, 유휴
 
 - [011-web-simulator.md](ticket/011-web-simulator.md): /simulator에서 시나리오 선택·시작·일시정지/재개·중지·배속·참가자별 상태를 조작한다.
 - 기존 엔진을 단일 Next Node 서버의 메모리 세션으로 재사용하며 여러 탭의 상태와 실행 대상을 동기화한다. 실제 경매/독립 미리보기를 구분하고 기존 CLI와 API를 보존한다.
+
+## 추가 티켓: 대시보드 시뮬레이션 설정과 시작
+
+- [012-dashboard-simulation-control.md](ticket/012-dashboard-simulation-control.md): 경매 대시보드에서 참가자 인원·성향·예산을 모달로 구성하고 그 구성으로 바로 실행·일시정지·중지한다.
+- 세션 `start`가 준비된 `scenarioId` 외에 직접 구성한 `scenario`를 받고 서버가 기존 규칙으로 다시 검증한다. 직접 구성한 시나리오는 예약 ID `custom` 한 자리를 차지하며 기존 /simulator 화면과 CLI 경로를 보존한다.

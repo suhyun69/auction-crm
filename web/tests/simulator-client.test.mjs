@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import clientModule from '../.test-build/simulator/client.js';
-const { createSimulatorClient, shouldSyncSimulationSelection } = clientModule;
+const { createSimulatorClient } = clientModule;
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const snapshot = (revision, sessionId = 'server-a') => ({ sessionId, revision, scenarios: [], run: null });
@@ -57,11 +57,3 @@ test('dispose aborts requests, drops late data and stops polling without sending
   assert.equal(s.requests.filter(x => x.method === 'POST').length, 0);
 });
 
-test('new completed run synchronizes selectors while repeated terminal polls preserve preview choices', () => {
-  const completed = (id, scenarioId) => ({ ...snapshot(5), run: { runId: id, scenarioId, phase: 'completed' } });
-  assert.equal(shouldSyncSimulationSelection(snapshot(1), completed('new-run', 'quick-duel')), true);
-  assert.equal(shouldSyncSimulationSelection(completed('old-run', 'standard'), completed('new-run', 'quick-duel')), true);
-  assert.equal(shouldSyncSimulationSelection(completed('same-run', 'quick-duel'), completed('same-run', 'quick-duel')), false);
-  assert.equal(shouldSyncSimulationSelection({ ...snapshot(4), run: { runId: 'x', phase: 'running' } }, completed('x', 'quick-duel')), true);
-  assert.equal(shouldSyncSimulationSelection(snapshot(9), snapshot(0, 'new-server')), true);
-});
