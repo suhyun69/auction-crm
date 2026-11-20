@@ -28,7 +28,7 @@
   - `API_IMPL=api npm run dev`(같은 포트): Spring 시작, 로그 `대시보드 연결 rest`, 브라우저에서 SSE `dashboard-changed` → `GET /api/dashboard` 재조회로 갱신, GraphQL 요청 0회.
   - `docker compose up --build -d --wait`(`auction-crm-020c`, 웹 3102·API 18082·DB 55434): api2 컨테이너가 마이그레이션 적용 후 시작, 세 컨테이너 healthy, 웹 컨테이너의 엔진이 `http://api:8080`(api2)로 응찰(33건)하고 브라우저 대시보드가 GraphQL 구독으로 갱신. 확인 후 이 스택만 내렸다.
   - `docker compose config`로 `API_IMPL=api NEXT_PUBLIC_API_PROTOCOL=rest`가 `api/` 빌드와 rest 인자로 풀리는 것을 확인(Spring 이미지 빌드는 하지 않음).
-- 기존 문제(이 티켓 변경과 무관, 후속 필요): Compose에서 `WEB_PORT`를 3000이 아닌 값으로 바꾸면, 컨테이너 안 웹은 3000으로 받으므로 시뮬레이터 제어 API(`POST /api/simulator`)의 Origin 검사가 브라우저 원점(예: `http://localhost:3102`)을 거부해 시작 버튼이 403으로 실패한다. 검증에서는 시작 명령만 컨테이너 내부 원점으로 보내 우회했다. 기본 포트(3000)에서는 생기지 않는다.
+- 기존 문제(이 티켓 변경과 무관, 후속 필요): Compose에서 `WEB_PORT`를 3000이 아닌 값으로 바꾸면, 컨테이너 안 웹은 3000으로 받으므로 시뮬레이터 제어 API(`POST /api/simulator`)의 Origin 검사가 브라우저 원점(예: `http://localhost:3102`)을 거부해 시작 버튼이 403으로 실패한다. 검증에서는 시작 명령만 컨테이너 내부 원점으로 보내 우회했다. 기본 포트(3000)에서는 생기지 않는다. → 021에서 수정.
 - 참고: api2 시작 시 Fastify 경고 `FSTWRN004`(오류 처리기를 같은 범위에서 다시 설정)가 한 번 찍힌다. 018에서 Mercurius 등록 순서 때문에 의도적으로 처리기를 겹쳐 설정한 결과이며 동작에는 영향이 없다.
 - 병합 후 회귀: master에서 `node --check scripts/dev.mjs`, `docker compose config`, api2 build·단위 8개·e2e 52개, `verify_acceptance.py`(기본 api2), web 테스트 33개·lint 통과.
 - 작업 커밋: `f32d377`

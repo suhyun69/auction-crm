@@ -147,4 +147,4 @@ SSE 연결 준비 시 `ready`, 새 응찰 커밋 후 `dashboard-changed`, 유휴
 - [015-api2-foundation.md](ticket/015-api2-foundation.md): 프로젝트 기반(Fastify, Zod 설정, MikroORM 엔티티·마이그레이션, 경매 초기화).
 - 016 REST 응찰·대시보드, 017 SSE, 018 GraphQL, 019 web GraphQL 연결.
 - [020-api2-switch.md](ticket/020-api2-switch.md): `npm run dev`·`docker compose`·수용 테스트의 기본 API를 api2로, 웹 대시보드 연결을 GraphQL로 전환한다. `API_IMPL=api`(웹은 rest)로 Spring을 계속 고를 수 있고 `api/`는 지우지 않는다.
-
+- [021-control-origin-host.md](ticket/021-control-origin-host.md): 시뮬레이터 제어 Origin 검사를 브라우저가 접속한 Host와도 비교해, Compose 포트 매핑·프록시 뒤에서 시작·중지가 403이 되던 문제를 고친다.
