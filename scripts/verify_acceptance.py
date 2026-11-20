@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Run isolated HTTP/SSE/concurrency/persistence checks against the built API jar.
+"""Run isolated HTTP/SSE/concurrency/persistence checks against the built API.
 
 Uses only Python's standard library and a throwaway PostgreSQL container
 (tmpfs data, removed afterwards), never the `npm run dev` database. Docker is required.
-Build first: cd api && ./gradlew bootJar
-Run from root: python3 scripts/verify_acceptance.py
+Spring API (default): cd api && ./gradlew bootJar, then python3 scripts/verify_acceptance.py
+NestJS api2: cd api2 && npm run build, then python3 scripts/verify_acceptance.py --impl api2
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -118,17 +118,27 @@ def stop_postgres(container):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--impl', choices=['api', 'api2'], default='api',
+                        help='api: Spring Boot jar (default), api2: NestJS build in api2/dist')
     parser.add_argument('--jar', type=Path, help='Built Spring Boot executable jar')
     args = parser.parse_args()
-    jars = sorted((ROOT / 'api/build/libs').glob('*.jar'))
-    jars = [p for p in jars if not p.name.endswith('-plain.jar')]
-    jar = args.jar.resolve() if args.jar else (jars[0] if jars else None)
-    if jar is None or not jar.is_file():
-        parser.error('API jar missing. Run: cd api && ./gradlew bootJar')
-    java_home = os.environ.get('JAVA_HOME')
-    java = str(Path(java_home) / 'bin/java') if java_home else shutil.which('java')
-    if not java:
-        parser.error('Java 21 or newer is required; configure JAVA_HOME.')
+    if args.impl == 'api2':
+        node = shutil.which('node')
+        entry = ROOT / 'api2/dist/main.js'
+        if not node:
+            parser.error('Node.js 22 or newer is required for api2.')
+        if not entry.is_file():
+            parser.error('api2 build missing. Run: cd api2 && npm run build')
+    else:
+        jars = sorted((ROOT / 'api/build/libs').glob('*.jar'))
+        jars = [p for p in jars if not p.name.endswith('-plain.jar')]
+        jar = args.jar.resolve() if args.jar else (jars[0] if jars else None)
+        if jar is None or not jar.is_file():
+            parser.error('API jar missing. Run: cd api && ./gradlew bootJar')
+        java_home = os.environ.get('JAVA_HOME')
+        java = str(Path(java_home) / 'bin/java') if java_home else shutil.which('java')
+        if not java:
+            parser.error('Java 21 or newer is required; configure JAVA_HOME.')
     origin = 'http://127.0.0.1:' + str(available_port())
     port = origin.rsplit(':', 1)[1]
     if not shutil.which('docker'):
@@ -143,13 +153,19 @@ def main():
 
         def start():
             nonlocal process
-            process = subprocess.Popen([
-                java, '-jar', str(jar), '--server.port=' + port,
-                '--spring.datasource.url=jdbc:postgresql://127.0.0.1:' + db_port + '/auction',
-                '--server.shutdown=immediate',
-                '--logging.level.root=WARN', '--logging.level.com.example.demo=INFO',
-                '--logging.level.org.hibernate.SQL=OFF',
-            ], cwd=folder, stdout=log, stderr=subprocess.STDOUT)
+            if args.impl == 'api2':
+                env = {**os.environ, 'PORT': port, 'DB_HOST': '127.0.0.1', 'DB_PORT': db_port,
+                       'DB_NAME': 'auction', 'DB_USERNAME': 'auction', 'DB_PASSWORD': 'auction'}
+                process = subprocess.Popen([node, str(entry)], cwd=ROOT / 'api2', env=env,
+                                           stdout=log, stderr=subprocess.STDOUT)
+            else:
+                process = subprocess.Popen([
+                    java, '-jar', str(jar), '--server.port=' + port,
+                    '--spring.datasource.url=jdbc:postgresql://127.0.0.1:' + db_port + '/auction',
+                    '--server.shutdown=immediate',
+                    '--logging.level.root=WARN', '--logging.level.com.example.demo=INFO',
+                    '--logging.level.org.hibernate.SQL=OFF',
+                ], cwd=folder, stdout=log, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 60
             while time.monotonic() < deadline:
                 if process.poll() is not None:
