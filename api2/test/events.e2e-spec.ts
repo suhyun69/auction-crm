@@ -15,7 +15,10 @@ let container: StartedPostgreSqlContainer;
 let app: NestFastifyApplication;
 let base: string;
 const streams: SseStream[] = [];
-const listeners = () => app.get(EventEmitter2).listenerCount(BID_RECORDED);
+// 앱 안의 다른 구독자(GraphQL 알림)를 뺀, 열린 SSE 연결의 리스너 수.
+let baseline = 0;
+const listeners = () =>
+  app.get(EventEmitter2).listenerCount(BID_RECORDED) - baseline;
 
 async function connect(headers?: Record<string, string>) {
   const stream = await openSse(`${base}/api/events`, headers);
@@ -30,6 +33,7 @@ beforeAll(async () => {
     AUCTION_EVENTS_TIMEOUT_MS: '15000',
   });
   app = await createTestApp();
+  baseline = app.get(EventEmitter2).listenerCount(BID_RECORDED);
   // SSE는 끝나지 않는 응답이라 inject 대신 실제 포트로 띄운다.
   await app.listen(0, '127.0.0.1');
   base = await app.getUrl();
