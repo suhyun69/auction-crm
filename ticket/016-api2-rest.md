@@ -1,6 +1,6 @@
 # 016 — api2 REST: 응찰·대시보드
 
-- 상태: IN_PROGRESS
+- 상태: DONE
 - 담당: api2(루트가 직접 수행)
 - 선행: 015 병합 완료
 - 브랜치: codex/016-api2-rest
@@ -22,7 +22,17 @@
 - [x] 오류 본문 `{timestamp, status, error, message}`, CORS(허용 원점, GET·POST·OPTIONS, Content-Type·Idempotency-Key), OpenAPI 문서(`/swagger-ui`, `/v3/api-docs`).
 - [x] e2e 테스트(판정·멱등·검증·동시성·순위·일관된 스냅샷)와 실제 시뮬레이션 엔진 연동을 확인한다.
 - [x] 학습 노트에 016 개념을 정리한다.
-- [ ] 커밋과 `--no-ff` 병합, 병합 후 회귀 확인.
+- [x] 커밋과 `--no-ff` 병합, 병합 후 회귀 확인.
+
+## 결과
+
+- 변경 요약: `AuctionController`(HTTP만)와 `AuctionService`(잠금·멱등·판정·집계), 순수 함수 `judgeBid()`를 `auction` 모듈에 더했다. 응찰은 `em.transactional()` 안에서 경매 행을 `PESSIMISTIC_WRITE`로 잠근 뒤 멱등 키 조회 → 참가자 조회·생성 → 판정 → 저장 순서로 처리한다. 대시보드는 참가자별 집계 SQL 한 번으로 순위를 만들고 요약을 그 결과에서 계산한다. 요청 본문은 Zod 스키마(`@Body({ schema })` + 전역 `StandardSchemaValidationPipe`)로, `Idempotency-Key`는 `@Headers()`가 스키마를 받지 않아 서비스에서 Zod로 검증한다. 전역 `AllExceptionsFilter`가 Nest 예외·Fastify 본문 오류·그 밖의 예외를 `api/`와 같은 오류 본문으로 바꾼다. 응답도 Zod 스키마로 정의해 OpenAPI(`/swagger-ui`, `/v3/api-docs`)와 타입을 한곳에서 만든다. 전역 설정은 `configureApp()`에 모아 main과 테스트가 같이 쓴다.
+- 검증: lint 경고 0, `tsc --noEmit`·build 통과. 단위 8개(판정 규칙, 요청·키 스키마, 환경 변수), e2e 38개 통과. e2e는 Spring `BidControllerTest`·`DashboardControllerTest`의 판정·멱등 재전송·409·잘못된 금액/이름/키/본문/뒤따르는 토큰·상한 경계·동시 첫 응찰 8건·같은 키 동시 8건·같은 키 다른 요청·빈 대시보드·순위·쓰기 중 일관된 스냅샷과 CORS 사전 요청을 옮겼다.
+- 실제 연동: 임시 PostgreSQL로 api2를 띄우고 `node simulator/cli.mjs --api http://localhost:18080 --speed 100`을 실행해 60초 시나리오를 끝까지 완료(응찰 65건, 최고가 232,057원). 엔진의 HTTP 클라이언트가 하는 응답 형식 검사를 모두 통과했다. curl로 오류 본문·no-store·CORS·OpenAPI 문서를 확인했다.
+- 옮기지 않은 Spring 테스트: 저장 중 실패 시 롤백(어댑터 목 주입)과 대시보드 SQL 1회 통계 검사. 롤백은 `em.transactional()`이, SQL 1회는 코드 구조(쿼리 한 번)가 보장하며 테스트로는 덮지 않았다.
+- 병합 후 회귀: master에서 build, 단위 8개, e2e 38개 통과. `api/`·`web/`·`simulator/`는 바꾸지 않았다.
+- 작업 커밋: `16bc269`
+- 병합 커밋: `8d068f7` (master --no-ff)
 
 ## 범위에서 뺀 것
 
