@@ -6,6 +6,7 @@
 **/.next/
 # Java port/out 및 adapter/out 소스는 제외하지 않는다.
 /web/out/
+/api2/dist/
 **/coverage/
 *.tsbuildinfo
 *.log
