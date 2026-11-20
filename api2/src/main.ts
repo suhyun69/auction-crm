@@ -5,6 +5,7 @@ import {
 } from '@nestjs/platform-fastify';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module.js';
+import { configureApp, setupOpenApi } from './app.setup.js';
 import type { Env } from './config/env.js';
 
 async function bootstrap() {
@@ -13,6 +14,8 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter(),
   );
+  configureApp(app);
+  setupOpenApi(app);
   // SIGTERM에 DB 연결 등을 정리하고 끝낸다.
   app.enableShutdownHooks();
   const config = app.get(ConfigService<Env, true>);
