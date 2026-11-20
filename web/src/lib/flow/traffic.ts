@@ -21,6 +21,8 @@ export type FlowCall = {
   message?: string;
   /** 같은 호출의 요청과 응답을 잇는 키. 응답 패킷은 요청 패킷이 도착한 뒤 출발한다. */
   pair?: string;
+  /** web이 GraphQL로 받거나 읽은 호출이면 "graphql" */
+  protocol?: "graphql";
   /** 서버 기록은 실행 시작 기준 경과, 브라우저 기록은 수신 시각 기준. 재생 간격 계산에만 쓴다. */
   atMs: number;
 };
@@ -51,16 +53,17 @@ export function fromServerRecord(record: TrafficRecord, runId: string): FlowCall
 }
 
 export function fromWebEntry(entry: WebTrafficEntry): FlowCall {
+  const protocol = entry.protocol ? { protocol: entry.protocol } : {};
   if (entry.kind === "sse") {
-    return { id: `web:${entry.id}`, lane: "api-web", kind: "sse", direction: "push", name: entry.name, atMs: entry.at };
+    return { id: `web:${entry.id}`, lane: "api-web", kind: "sse", direction: "push", name: entry.name, atMs: entry.at, ...protocol };
   }
   if (entry.direction === "request") {
     // 재조회는 한 번에 하나씩만 진행되므로 고정 키로 요청과 응답을 잇는다.
-    return { id: `web:${entry.id}`, lane: "web-api", kind: "refresh", direction: "request", pair: "web:refresh", atMs: entry.at };
+    return { id: `web:${entry.id}`, lane: "web-api", kind: "refresh", direction: "request", pair: "web:refresh", atMs: entry.at, ...protocol };
   }
   return {
     id: `web:${entry.id}`, lane: "api-web", kind: "refresh", direction: "response",
-    outcome: entry.ok ? "OK" : "ERROR", durationMs: entry.durationMs, pair: "web:refresh", atMs: entry.at,
+    outcome: entry.ok ? "OK" : "ERROR", durationMs: entry.durationMs, pair: "web:refresh", atMs: entry.at, ...protocol,
   };
 }
 

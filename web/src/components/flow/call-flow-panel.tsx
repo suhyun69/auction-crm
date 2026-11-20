@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { API_PROTOCOL } from "@/lib/dashboard/api";
 import { formatAmount, formatNumber } from "@/lib/dashboard/format";
 import type { WebTraffic } from "@/lib/dashboard/live-dashboard";
 import {
@@ -18,8 +19,13 @@ export type CallFlowHandle = {
 };
 
 type Filter = "bid" | "read" | "web";
+/** web ↔ API 구간의 이름. graphql 모드에서는 SSE·재조회 대신 GraphQL 구독·조회다. */
+const WEB_LINK = API_PROTOCOL === "graphql"
+  ? { push: "GraphQL 구독", read: "GraphQL 조회", chip: "구독·조회", pushShort: "구독", readShort: "조회", lanes: { "api-web": "구독·응답", "web-api": "조회" } }
+  : { push: "SSE 알림", read: "Web 재조회", chip: "SSE·재조회", pushShort: "SSE", readShort: "재조회", lanes: { "api-web": "SSE·응답", "web-api": "재조회" } };
+
 const FILTERS: { key: Filter; label: string }[] = [
-  { key: "bid", label: "응찰" }, { key: "read", label: "엔진 조회" }, { key: "web", label: "SSE·재조회" },
+  { key: "bid", label: "응찰" }, { key: "read", label: "엔진 조회" }, { key: "web", label: WEB_LINK.chip },
 ];
 const MAX_LOG = 60;
 const MAX_ACTIVE = 90;
@@ -37,9 +43,10 @@ function filterOf(call: FlowCall): Filter {
 }
 
 function describe(call: FlowCall) {
-  if (call.kind === "sse") return `SSE ${call.name ?? "알림"}`;
+  if (call.kind === "sse") return call.protocol === "graphql" ? `GraphQL 구독 · ${call.name ?? "알림"}` : `SSE ${call.name ?? "알림"}`;
   if (call.direction === "request") {
     if (call.kind === "bid") return `POST /api/bid · ${call.customerName ?? ""} ${call.amount !== undefined ? formatAmount(call.amount) : ""}`.trim();
+    if (call.kind === "refresh" && call.protocol === "graphql") return "POST /graphql · query dashboard";
     return "GET /api/dashboard";
   }
   if (call.outcome === "ERROR") return call.message ? `오류 · ${call.message}` : "오류";
@@ -74,7 +81,7 @@ function nodeInfo(stats: FlowStats, run: SimulationRun | null): Record<FlowNode,
     },
     web: {
       title: "Web",
-      lines: [`SSE ${formatNumber(stats.web.notified)} · 재조회 ${formatNumber(stats.web.refreshed)}`],
+      lines: [`${WEB_LINK.pushShort} ${formatNumber(stats.web.notified)} · ${WEB_LINK.readShort} ${formatNumber(stats.web.refreshed)}`],
     },
   };
 }
@@ -198,15 +205,15 @@ export function CallFlowPanel({ run, ref }: { run: SimulationRun | null; ref: Re
         </div>
 
         <FlowScene view={view} onView={setView} nodes={nodes} selected={selected} onSelect={setSelected}
-          packets={packets} paused={paused} reducedMotion={reducedMotion} onPacketDone={removePacket} idleLanes={idleLanes} badges={badges} />
+          packets={packets} paused={paused} reducedMotion={reducedMotion} onPacketDone={removePacket} idleLanes={idleLanes} badges={badges} laneLabels={WEB_LINK.lanes} />
 
         <ul className="flow-legend" aria-label="패킷 색 안내">
           <li><span className="legend-dot packet-bid" />응찰 요청</li>
           <li><span className="legend-dot packet-accepted" />승인</li>
           <li><span className="legend-dot packet-rejected" />기각</li>
           <li><span className="legend-dot packet-read" />엔진 조회</li>
-          <li><span className="legend-dot packet-sse" />SSE 알림</li>
-          <li><span className="legend-dot packet-refresh" />Web 재조회</li>
+          <li><span className="legend-dot packet-sse" />{WEB_LINK.push}</li>
+          <li><span className="legend-dot packet-refresh" />{WEB_LINK.read}</li>
           <li><span className="legend-dot packet-error" />오류</li>
         </ul>
         {preview && <p className="flow-note">미리보기는 엔진 안의 로컬 시장에 응찰하므로 Web으로 가는 알림이 없습니다.</p>}

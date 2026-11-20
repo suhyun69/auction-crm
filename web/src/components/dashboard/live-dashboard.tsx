@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CallFlowPanel, type CallFlowHandle } from "@/components/flow/call-flow-panel";
 import { ParticipantDetailDialog } from "@/components/simulator/participant-detail-dialog";
 import { SimulationLauncher } from "@/components/simulator/simulation-launcher";
+import { API_PROTOCOL } from "@/lib/dashboard/api";
+import { createGraphqlDashboardLink } from "@/lib/dashboard/graphql";
 import { createLiveDashboard } from "@/lib/dashboard/live-dashboard";
 import type { ConnectionStatus, DashboardData } from "@/lib/dashboard/types";
 import { findByName } from "@/lib/simulator/history";
@@ -26,7 +28,8 @@ export function LiveDashboard() {
       onData: setData, onLoading: setLoading, onError: setError,
       onConnection: setConnectionStatus, onChanged: setChangedParticipantIds,
       onTraffic: traffic => flow.current?.web(traffic),
-    });
+    // graphql 모드는 api2의 GraphQL 조회·구독으로, 그 밖에는 REST·SSE로 연결한다.
+    }, API_PROTOCOL === "graphql" ? { graphql: createGraphqlDashboardLink() } : {});
     client.current = dashboard;
     return () => {
       dashboard.dispose();
