@@ -26,6 +26,7 @@ npm run start:dev      # 코드 변경 시 다시 시작
 - 응찰: `curl -X POST localhost:8080/api/bid -H 'content-type: application/json' -H 'Idempotency-Key: k1' -d '{"customerName":"홍길동","amount":1000}'`
 - 대시보드: `curl localhost:8080/api/dashboard`
 - 변경 알림(SSE): `curl -N localhost:8080/api/events`
+- GraphQL: http://localhost:8080/graphiql 에서 조회·응찰을 직접 실행한다. 구독은 같은 `/graphql` 경로의 WebSocket(graphql-ws)이다.
 
 | 명령 | 하는 일 |
 |---|---|
@@ -45,8 +46,11 @@ src/
 ├── main.ts                    앱 시작: Fastify 어댑터, 종료 훅, 포트
 ├── app.module.ts              루트 모듈: 설정·DB·기능 모듈을 묶는다
 ├── app.setup.ts               main.ts와 테스트가 같이 쓰는 설정: CORS, 검증 파이프, 예외 필터, OpenAPI
+├── graphql.config.ts          GraphQL(Mercurius): 경로, GraphiQL, 구독 원점 검사
 ├── config/env.ts              환경 변수 Zod 스키마
-├── common/http/               오류 본문 형식, 전역 예외 필터
+├── common/http/               오류 본문 형식, 전역 예외 필터(REST 본문 / GraphQL extensions.code),
+│                              핸들러 밖 오류를 답하는 Fastify 오류 처리기
+├── common/validation/         스키마 하나로 인자를 검증하는 파이프(GraphQL @Args용)
 ├── database/database.module.ts  MikroORM 연결, 시작 시 마이그레이션
 ├── mikro-orm.config.ts        앱과 마이그레이션 CLI가 같이 쓰는 ORM 설정
 ├── migrations/                MikroORM 마이그레이션
@@ -58,6 +62,7 @@ src/
     ├── auction.service.ts     잠금·멱등·판정·대시보드 집계
     ├── bid-judgement.ts       최고가 판정 규칙(순수 함수)
     ├── auction-initializer.service.ts  경매 1번 행 준비
+    ├── graphql/               리졸버, GraphQL 타입, SafeInt 스칼라, 구독 알림(DashboardPublisher)
     ├── dto/                   요청 Zod 스키마, 응답 스키마·타입
     └── entities/              Auction · Participant · Bid
 test/                          e2e 테스트 (support/: 컨테이너·앱 준비, SSE 클라이언트)
@@ -134,4 +139,91 @@ test/                          e2e 테스트 (support/: 컨테이너·앱 준비
 - **`EventEmitter2.emit()`은 동기 호출이다.** 받는 쪽이 예외를 던지면 `emit()`을 부른 곳으로 올라온다. 이미 커밋된 응찰이 500이 되지 않게 `publish()`가 예외를 잡아 로그만 남긴다. (`@OnEvent()`로 단 핸들러는 기본으로 예외를 삼킨다.)
 - **CORS 사전 요청.** 허용하지 않은 원점의 사전 요청에 `api/`는 403, api2(`@fastify/cors`)는 허용 헤더 없이 204로 답한다. 브라우저는 두 경우 모두 요청을 막는다.
 - **수용 테스트.** `python3 scripts/verify_acceptance.py --impl api2`로 HTTP·SSE·재시작 후 데이터 유지를 `api/`와 같은 시나리오로 확인한다(먼저 `npm run build`).
+
+### 018 — GraphQL (Mercurius)
+
+| Spring | NestJS | 이 프로젝트에서 |
+|---|---|---|
+| (Spring for GraphQL의 `@Controller` + `@QueryMapping`) | `@Resolver()` 클래스의 `@Query`·`@Mutation`·`@Subscription` 메서드 | `graphql/auction.resolver.ts` |
+| `schema.graphqls` 파일을 먼저 작성(schema-first) | 클래스·데코레이터에서 스키마를 만든다(code-first): `@ObjectType`, `@InputType`, `@Field`, `registerEnumType` | `graphql/auction.models.ts` |
+| 커스텀 스칼라 `GraphQLScalarType` | `@Scalar('SafeInt')` 클래스(`parseValue`·`parseLiteral`·`serialize`) | `SafeInt` |
+| `@Argument` + 검증 | `@Args('input', 옵션, 파이프)`. 스키마를 받는 옵션이 없어 같은 Zod 스키마를 쓰는 파이프를 직접 붙인다 | `SchemaValidationPipe` |
+| `@GraphQlExceptionHandler` | 같은 전역 예외 필터가 GraphQL에서는 오류를 **돌려준다**(`ErrorWithProps` + `extensions.code`) | `AllExceptionsFilter` |
+| `@SubscriptionMapping` + `Flux` | `@Subscription`이 Mercurius PubSub의 `subscribe(토픽)`을 돌려주고, 발행은 `pubsub.publish({ topic, payload })` | `DashboardPublisher` |
+| `@EventListener` | `@OnEvent(BID_RECORDED)`. 핸들러 예외는 기본으로 삼켜져 응찰 응답에 영향이 없다 | `onBidRecorded()` |
+| WebSocket 핸드셰이크 인터셉터 | Mercurius `subscription.verifyClient`로 Origin 검사 | `graphql.config.ts` |
+
+알아 둘 차이:
+
+- **같은 서비스, 두 입구.** 컨트롤러(REST)와 리졸버(GraphQL)는 둘 다 `AuctionService`를 부른다. 규칙은 한곳에 있고 입구만 다르다.
+- **GraphQL 오류는 HTTP 200으로 온다.** 실패는 상태 코드가 아니라 응답의 `errors[].extensions.code`(`BAD_REQUEST`, `CONFLICT`)로 구분한다. 타입이 틀린 입력(문자열 금액, 2^53 이상)은 리졸버에 오기 전에 GraphQL 검증 단계에서 거부된다.
+- **`Int`는 32비트다.** 원화 금액은 21억을 넘을 수 있어 `SafeInt` 스칼라(±2^53 − 1)를 따로 만들었다. 순위·참가자 수처럼 작은 값만 `Int`를 쓴다.
+- **구독은 WebSocket으로만.** Nest의 Mercurius 드라이버는 HTTP로 온 구독 연산을 거부한다. 구독 메시지는 응찰마다 최신 대시보드를 통째로 담으므로, 받는 쪽은 다시 조회할 필요가 없다. 응찰이 몰리면 읽는 동안 들어온 알림을 묶어 마지막 스냅샷을 한 번 더 보낸다(순서는 항상 오래된 것 → 새것).
+- **플러그인 등록 순서가 동작을 바꾼다.** Nest는 경로 등록 → 초기화 훅(`onModuleInit`) → 오류 처리기 설치 순서로 시작한다. Mercurius 드라이버가 초기화 훅 안에서 `await app.register()`를 부르면 그때까지 등록된 REST 경로가 확정되는데, 그 시점에는 Nest 처리기가 아직 없어 깨진 JSON 같은 오류가 Fastify 기본 형식으로 나갔다. 그래서 같은 오류 처리기(`handleFastifyError`)를 초기화 전에 `configureApp()`에서 걸고, Mercurius의 `errorHandler` 옵션에도 넘긴다. 테스트가 이 회귀를 잡았다.
+- **`DateTime`은 `Date`를 받는다.** Nest의 `GraphQLISODateTime`은 `Date`만 직렬화하므로 리졸버가 ISO 문자열을 `Date`로 바꿔 넘긴다.
+
+GraphQL 스키마(019에서 web이 쓰는 계약):
+
+```graphql
+enum BidReason {
+  AMOUNT_NOT_HIGH_ENOUGH
+  NEW_HIGHEST_BID
+}
+
+type BidResult {
+  bidId: SafeInt!
+  highestAmount: SafeInt!
+  highestBidderName: String!
+  reason: BidReason!
+  status: BidStatus!
+  submittedAmount: SafeInt!
+}
+
+enum BidStatus {
+  ACCEPTED
+  REJECTED
+}
+
+type Dashboard {
+  participants: [DashboardParticipant!]!
+  summary: DashboardSummary!
+}
+
+type DashboardParticipant {
+  bidCount: SafeInt!
+  customerName: String!
+  highestAcceptedAmount: SafeInt
+  lastBidAt: DateTime!
+  participantId: SafeInt!
+  rank: Int!
+}
+
+type DashboardSummary {
+  bidCount: SafeInt!
+  highestAmount: SafeInt!
+  highestBidderName: String
+  participantCount: Int!
+}
+
+scalar DateTime
+
+type Mutation {
+  submitBid(idempotencyKey: String, input: SubmitBidInput!): BidResult!
+}
+
+type Query {
+  dashboard: Dashboard!
+}
+
+scalar SafeInt
+
+input SubmitBidInput {
+  amount: SafeInt!
+  customerName: String!
+}
+
+type Subscription {
+  dashboardChanged: Dashboard!
+}
+```
 

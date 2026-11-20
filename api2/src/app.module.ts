@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { GraphQLModule } from '@nestjs/graphql';
+import { MercuriusDriver, type MercuriusDriverConfig } from '@nestjs/mercurius';
 import { AuctionModule } from './auction/auction.module.js';
 import { envSchema } from './config/env.js';
 import { DatabaseModule } from './database/database.module.js';
+import { graphqlConfig } from './graphql.config.js';
 
 @Module({
   imports: [
@@ -12,6 +15,12 @@ import { DatabaseModule } from './database/database.module.js';
     // 앱 안의 이벤트 버스(Spring의 ApplicationEventPublisher). EventEmitter2를 주입할 수 있게 된다.
     EventEmitterModule.forRoot(),
     DatabaseModule,
+    // GraphQL 서버. Fastify 위에서 Mercurius로 돈다. 리졸버는 각 기능 모듈에 둔다.
+    GraphQLModule.forRootAsync<MercuriusDriverConfig>({
+      driver: MercuriusDriver,
+      inject: [ConfigService],
+      useFactory: graphqlConfig,
+    }),
     AuctionModule,
   ],
 })

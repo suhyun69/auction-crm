@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AllExceptionsFilter } from './common/http/all-exceptions.filter.js';
+import { handleFastifyError } from './common/http/fastify-error-handler.js';
 import type { Env } from './config/env.js';
 
 /**
@@ -33,6 +34,8 @@ export function configureApp(app: NestFastifyApplication) {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter());
+  // 핸들러 밖(본문 해석 등)에서 난 오류. GraphQL 등록 순서 때문에 초기화 전에 걸어 둔다(fastify-error-handler.ts).
+  app.getHttpAdapter().getInstance().setErrorHandler(handleFastifyError);
   return app;
 }
 

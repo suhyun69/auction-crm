@@ -28,10 +28,12 @@ async function listeningApp(): Promise<[NestFastifyApplication, string]> {
 it('제한 시간이 지나면 연결을 닫고 구독을 정리한다', async () => {
   const [app, base] = await listeningApp();
   try {
+    // 앱 안의 다른 구독자(GraphQL 알림)는 기준값으로 빼고 본다.
+    const baseline = app.get(EventEmitter2).listenerCount(BID_RECORDED);
     const stream = await openSse(`${base}/api/events`);
     await stream.next('ready');
     await stream.ended;
-    expect(app.get(EventEmitter2).listenerCount(BID_RECORDED)).toBe(0);
+    expect(app.get(EventEmitter2).listenerCount(BID_RECORDED)).toBe(baseline);
   } finally {
     await app.close();
   }
@@ -39,11 +41,14 @@ it('제한 시간이 지나면 연결을 닫고 구독을 정리한다', async (
 
 it('서버를 종료하면 열린 연결을 닫고 바로 끝난다', async () => {
   const [app, base] = await listeningApp();
+  const baseline = app.get(EventEmitter2).listenerCount(BID_RECORDED);
   const stream = await openSse(`${base}/api/events`);
   await stream.next('ready');
   const started = Date.now();
   await app.close();
   await stream.ended;
   expect(Date.now() - started).toBeLessThan(2000);
-  await until(() => app.get(EventEmitter2).listenerCount(BID_RECORDED) === 0);
+  await until(
+    () => app.get(EventEmitter2).listenerCount(BID_RECORDED) <= baseline,
+  );
 });
