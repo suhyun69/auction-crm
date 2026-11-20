@@ -6,6 +6,9 @@ import { createInterface } from 'node:readline';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const next = fileURLToPath(new URL('../web/node_modules/next/dist/bin/next', import.meta.url));
+const nest = fileURLToPath(new URL('../api2/node_modules/@nestjs/cli/bin/nest.js', import.meta.url));
+// API 구현: api2(NestJS, 기본) 또는 api(Spring). 둘 다 같은 REST·SSE 계약을 제공한다.
+const apiImpl = process.env.API_IMPL ?? 'api2';
 const children = [];
 let stopping = false;
 let finished = false;
@@ -89,7 +92,7 @@ function shutdown(code) {
   exitCode = code;
   console.log('\n[dev] API와 웹을 종료합니다.');
   for (const child of children) signal(child, 'SIGTERM');
-  // Gradle, Java, Next의 자식 프로세스도 같은 전용 그룹에서 정리한다.
+  // Gradle·Java·Nest·Next의 자식 프로세스도 같은 전용 그룹에서 정리한다.
   killTimer = setTimeout(() => {
     for (const child of children) signal(child, 'SIGKILL');
     finish();
@@ -121,7 +124,9 @@ process.on('SIGTERM', () => shutdown(0));
 
 try {
   if (process.platform === 'win32') throw new Error('통합 실행은 macOS/Linux에서 지원합니다.');
+  if (!['api', 'api2'].includes(apiImpl)) throw new Error('API_IMPL은 api2(기본) 또는 api여야 합니다.');
   if (!existsSync(next)) throw new Error('웹 의존성을 먼저 설치하세요: npm --prefix web ci');
+  if (apiImpl === 'api2' && !existsSync(nest)) throw new Error('api2 의존성을 먼저 설치하세요: npm --prefix api2 ci');
   const apiPort = port(process.env.API_PORT ?? process.env.SERVER_PORT ?? '8080', 'API_PORT');
   const webPort = port(process.env.WEB_PORT ?? '3000', 'WEB_PORT');
   const dbPort = port(process.env.DB_PORT ?? '5432', 'DB_PORT');
@@ -132,7 +137,7 @@ try {
   // 이전 실행이 남긴 컨테이너를 먼저 지워야 DB 포트 검사가 정확하다.
   removeDb(env);
   await Promise.all([checkPort(apiPort), checkPort(webPort), checkPort(dbPort)]);
-  if (!env.JAVA_HOME && process.platform === 'darwin') {
+  if (apiImpl === 'api' && !env.JAVA_HOME && process.platform === 'darwin') {
     try { env.JAVA_HOME = execFileSync('/usr/libexec/java_home', ['-v', '21'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
     catch { /* Gradle의 Java toolchain 탐색을 사용한다. */ }
   }
@@ -140,15 +145,27 @@ try {
   dbStarted = true;
   compose(['up', '--detach', '--wait', 'db'], env);
   if (stopping) finish();
-  console.log(`[dev] 웹 http://localhost:${webPort} / API http://localhost:${apiPort} / DB localhost:${dbPort}`);
+  // graphql 연결은 api2에만 있다. 직접 지정한 값이 있으면 그것을 쓴다.
+  const protocol = env.NEXT_PUBLIC_API_PROTOCOL ?? (apiImpl === 'api2' ? 'graphql' : 'rest');
+  console.log(`[dev] 웹 http://localhost:${webPort} / API(${apiImpl}) http://localhost:${apiPort} / DB localhost:${dbPort} / 대시보드 연결 ${protocol}`);
   console.log('[dev] Ctrl+C로 서버와 DB 컨테이너를 함께 종료합니다.');
-  start('api', './gradlew', ['--no-daemon', 'bootRun'], root + 'api', {
-    ...env, SERVER_PORT: String(apiPort),
-    AUCTION_WEB_ALLOWED_ORIGINS: env.AUCTION_WEB_ALLOWED_ORIGINS ?? `http://localhost:${webPort}`,
-    SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: env.SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE ?? '5s',
-  });
+  const allowedOrigins = env.AUCTION_WEB_ALLOWED_ORIGINS ?? `http://localhost:${webPort}`;
+  if (apiImpl === 'api2') {
+    // nest start --watch: 코드가 바뀌면 다시 빌드·시작한다. 시작할 때 마이그레이션을 적용한다.
+    start('api', process.execPath, [nest, 'start', '--watch'], root + 'api2', {
+      ...env, PORT: String(apiPort), DB_HOST: env.DB_HOST ?? 'localhost',
+      AUCTION_WEB_ALLOWED_ORIGINS: allowedOrigins,
+    });
+  } else {
+    start('api', './gradlew', ['--no-daemon', 'bootRun'], root + 'api', {
+      ...env, SERVER_PORT: String(apiPort),
+      AUCTION_WEB_ALLOWED_ORIGINS: allowedOrigins,
+      SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: env.SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE ?? '5s',
+    });
+  }
   start('web', process.execPath, [next, 'dev', '--port', String(webPort), ...process.argv.slice(2)], root + 'web', {
     ...env, NEXT_PUBLIC_API_ORIGIN: env.NEXT_PUBLIC_API_ORIGIN ?? `http://localhost:${apiPort}`,
+    NEXT_PUBLIC_API_PROTOCOL: protocol,
   });
 } catch (error) {
   console.error(`[dev] ${error.message}`);

@@ -145,5 +145,6 @@ SSE 연결 준비 시 `ready`, 새 응찰 커밋 후 `dashboard-changed`, 유휴
 - `api/`(Spring)를 그대로 두고, 시뮬레이션 엔진과 web이 쓰는 기능만 NestJS 12 · Fastify · MikroORM · Zod · Mercurius(GraphQL)로 다시 만든 `api2/`로 연결을 바꾼다. NestJS 학습이 목적이라 커뮤니티의 기능별 모듈 구조를 따르고 `api2/README.md`에 학습 노트를 남긴다.
 - 엔진은 REST 응찰, web은 GraphQL 조회·구독(rest 모드도 유지)을 쓴다. REST·SSE 계약은 `api/`와 같다.
 - [015-api2-foundation.md](ticket/015-api2-foundation.md): 프로젝트 기반(Fastify, Zod 설정, MikroORM 엔티티·마이그레이션, 경매 초기화).
-- 016 REST 응찰·대시보드, 017 SSE, 018 GraphQL, 019 web GraphQL 연결, 020 연결 전환.
+- 016 REST 응찰·대시보드, 017 SSE, 018 GraphQL, 019 web GraphQL 연결.
+- [020-api2-switch.md](ticket/020-api2-switch.md): `npm run dev`·`docker compose`·수용 테스트의 기본 API를 api2로, 웹 대시보드 연결을 GraphQL로 전환한다. `API_IMPL=api`(웹은 rest)로 Spring을 계속 고를 수 있고 `api/`는 지우지 않는다.
 

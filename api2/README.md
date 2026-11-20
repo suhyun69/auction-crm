@@ -13,7 +13,7 @@ Java/Spring을 NestJS로 옮기며 익히는 것이 목적이라, 티켓마다 �
 
 ## 실행
 
-PostgreSQL이 필요하다. 저장소 루트에서 `npm run db:up`으로 개발 DB를 띄운 뒤:
+저장소 루트의 `npm run dev`가 기본으로 api2를 띄운다(PostgreSQL·web 포함, web은 GraphQL로 연결). api2만 따로 띄울 때는 PostgreSQL이 필요하다. 저장소 루트에서 `npm run db:up`으로 개발 DB를 띄운 뒤:
 
 ```bash
 npm install
