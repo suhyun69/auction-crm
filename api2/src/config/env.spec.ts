@@ -11,6 +11,8 @@ describe('parseEnv', () => {
       DB_USERNAME: 'auction',
       DB_MIGRATE_ON_START: true,
       AUCTION_WEB_ALLOWED_ORIGINS: ['http://localhost:3000'],
+      AUCTION_EVENTS_HEARTBEAT_MS: 15000,
+      AUCTION_EVENTS_TIMEOUT_MS: 1800000,
     });
   });
 

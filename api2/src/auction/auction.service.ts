@@ -2,8 +2,11 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EntityManager, LockMode } from '@mikro-orm/postgresql';
+import { BID_RECORDED, BidRecordedEvent } from './auction.events.js';
 import { judgeBid } from './bid-judgement.js';
 import type {
   BidResponse,
@@ -34,7 +37,12 @@ type StandingRow = {
  */
 @Injectable()
 export class AuctionService {
-  constructor(private readonly em: EntityManager) {}
+  private readonly logger = new Logger(AuctionService.name);
+
+  constructor(
+    private readonly em: EntityManager,
+    private readonly events: EventEmitter2,
+  ) {}
 
   async submitBid(bid: SubmitBid, rawKey?: string): Promise<BidResponse> {
     const parsedKey = idempotencyKeySchema.safeParse(rawKey);
@@ -43,7 +51,7 @@ export class AuctionService {
     const key = parsedKey.data;
 
     // @Transactional 자리. 콜백 안의 em은 이 트랜잭션 전용이며, 끝나면 flush 후 커밋한다.
-    return this.em.transactional(async (em) => {
+    const { response, recorded } = await this.em.transactional(async (em) => {
       // 경매 행을 잠가 응찰을 한 줄로 세운다. 참가자 생성과 멱등 키 조회도 이 잠금 안에서 한다.
       const auction = await em.findOneOrFail(Auction, AUCTION_ID, {
         lockMode: LockMode.PESSIMISTIC_WRITE,
@@ -62,7 +70,7 @@ export class AuctionService {
           ) {
             throw new ConflictException(IDEMPOTENCY_CONFLICT_MESSAGE);
           }
-          return toBidResponse(previous);
+          return { response: toBidResponse(previous), recorded: false };
         }
       }
 
@@ -99,8 +107,25 @@ export class AuctionService {
       });
       // id가 있어야 응답을 만들 수 있으므로 커밋 전에 한 번 flush한다.
       await em.flush();
-      return toBidResponse(saved);
+      return { response: toBidResponse(saved), recorded: true };
     });
+
+    // transactional()이 끝났다 = 커밋됐다. 새 기록이 생긴 경우에만 알린다(재전송은 알리지 않는다).
+    // Spring에서 TransactionSynchronization.afterCommit()으로 하던 일을 await 순서로 표현한다.
+    if (recorded)
+      this.publish(new BidRecordedEvent(response.bidId, response.status));
+    return response;
+  }
+
+  /** 알림을 받는 쪽의 오류가 이미 커밋된 응찰의 응답을 바꾸지 않게 한다. */
+  private publish(event: BidRecordedEvent) {
+    try {
+      this.events.emit(BID_RECORDED, event);
+    } catch (error) {
+      this.logger.warn(
+        `응찰 알림 처리 중 오류: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /**

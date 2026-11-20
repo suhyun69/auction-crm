@@ -26,6 +26,18 @@ export const envSchema = z.object({
   DB_MIGRATE_ON_START: z.stringbool().default(true),
   /** 브라우저에서 접근할 웹 원점. 여러 개는 쉼표로 구분한다. */
   AUCTION_WEB_ALLOWED_ORIGINS: origins.default(['http://localhost:3000']),
+  /** SSE heartbeat 주석 간격(ms). 프록시가 조용한 연결을 끊지 않게 한다. */
+  AUCTION_EVENTS_HEARTBEAT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15_000),
+  /** SSE 연결 하나를 열어 두는 최대 시간(ms). 지나면 닫고, 브라우저가 다시 연결한다. */
+  AUCTION_EVENTS_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(1_800_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

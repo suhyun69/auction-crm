@@ -25,6 +25,7 @@ npm run start:dev      # 코드 변경 시 다시 시작
 - API 문서: http://localhost:8080/swagger-ui (원본 JSON `/v3/api-docs`)
 - 응찰: `curl -X POST localhost:8080/api/bid -H 'content-type: application/json' -H 'Idempotency-Key: k1' -d '{"customerName":"홍길동","amount":1000}'`
 - 대시보드: `curl localhost:8080/api/dashboard`
+- 변경 알림(SSE): `curl -N localhost:8080/api/events`
 
 | 명령 | 하는 일 |
 |---|---|
@@ -52,12 +53,14 @@ src/
 └── auction/                   경매 기능 모듈
     ├── auction.module.ts
     ├── auction.controller.ts  POST /api/bid, GET /api/dashboard (HTTP만)
+    ├── auction-events.controller.ts  GET /api/events (SSE)
+    ├── auction.events.ts      앱 안 이벤트 이름·내용(응찰 커밋)
     ├── auction.service.ts     잠금·멱등·판정·대시보드 집계
     ├── bid-judgement.ts       최고가 판정 규칙(순수 함수)
     ├── auction-initializer.service.ts  경매 1번 행 준비
     ├── dto/                   요청 Zod 스키마, 응답 스키마·타입
     └── entities/              Auction · Participant · Bid
-test/                          e2e 테스트 (support/test-app.ts: 컨테이너·앱 준비)
+test/                          e2e 테스트 (support/: 컨테이너·앱 준비, SSE 클라이언트)
 ```
 
 테이블·컬럼·제약 이름은 `api/`와 같다(`auction`, `auction_participant`, `auction_bid`). 다만 `api/`의 `auction.highest_bid_id`는 엔진·web이 쓰지 않아 옮기지 않았다.
@@ -112,4 +115,23 @@ test/                          e2e 테스트 (support/test-app.ts: 컨테이너�
 - **Zod `.int()`는 안전한 정수인지까지 본다.** 소수(본문 오류)와 범위 밖 정수(범위 오류)를 다른 메시지로 알리려고 `Number.isInteger` 검사를 범위 검사 앞에 따로 두었다.
 - **동시성 테스트.** Node는 스레드가 하나지만 DB 호출을 기다리는 동안 다른 요청이 끼어든다. 그래서 `Promise.all`로 동시에 보내도 잠금이 없으면 경합이 실제로 생기고, 잠금이 이를 막는지 확인할 수 있다.
 - **`api/`와 다른 점.** 정수 값을 `1.0`·`1e2`처럼 쓴 금액을 받아들인다(`JSON.parse`가 정수로 읽는다). 엔진·web은 이런 값을 보내지 않는다.
+
+### 017 — SSE 변경 알림
+
+| Spring | NestJS | 이 프로젝트에서 |
+|---|---|---|
+| `ApplicationEventPublisher` / 직접 만든 구독자 목록 | `@nestjs/event-emitter`의 `EventEmitter2`. `EventEmitterModule.forRoot()` 후 주입해 `emit()` | `AuctionService.publish()` |
+| `TransactionSynchronization.afterCommit()` | `await em.transactional(...)`이 끝난 뒤에 `emit()`. 커밋 후라는 사실을 코드 순서로 보장 | `submitBid()` |
+| `SseEmitter` + 연결별 자원 정리 클래스 | `@Sse('events')`가 `Observable<MessageEvent>`를 받아 Nest가 써 준다. 끊기면 구독이 해제되며 리스너·타이머도 정리 | `AuctionEventsController` |
+| `emitter.send(event().name(...).data(...))` | `{ type: 'dashboard-changed', data: {} }`. 주석은 `{ comment: 'heartbeat' }` | 상수 `READY`·`CHANGED`·`HEARTBEAT` |
+| `ScheduledExecutor`로 heartbeat, `SseEmitter(timeout)` | RxJS 연산자: `interval()`(heartbeat), `takeUntil(timer(...))`(제한 시간) | `stream()` |
+| `@PreDestroy`, graceful shutdown | 생명주기 훅 `beforeApplicationShutdown()`에서 모든 스트림 완료(`app.enableShutdownHooks()` 필요) | `shutdown$` |
+| `@SpringBootTest(webEnvironment = RANDOM_PORT)` | `app.listen(0)` + `app.getUrl()`. 끝나지 않는 응답은 `inject()` 대신 실제 포트와 `fetch` 스트림으로 | `test/support/sse.ts` |
+
+알아 둘 차이:
+
+- **Observable은 "구독할 때" 시작된다.** `stream()`은 값을 바로 만들지 않고 계획만 돌려준다. 연결마다 Nest가 구독하므로 리스너·타이머가 연결마다 따로 생기고, 연결이 끝나면 함께 사라진다(`listenerCount`로 확인).
+- **`EventEmitter2.emit()`은 동기 호출이다.** 받는 쪽이 예외를 던지면 `emit()`을 부른 곳으로 올라온다. 이미 커밋된 응찰이 500이 되지 않게 `publish()`가 예외를 잡아 로그만 남긴다. (`@OnEvent()`로 단 핸들러는 기본으로 예외를 삼킨다.)
+- **CORS 사전 요청.** 허용하지 않은 원점의 사전 요청에 `api/`는 403, api2(`@fastify/cors`)는 허용 헤더 없이 204로 답한다. 브라우저는 두 경우 모두 요청을 막는다.
+- **수용 테스트.** `python3 scripts/verify_acceptance.py --impl api2`로 HTTP·SSE·재시작 후 데이터 유지를 `api/`와 같은 시나리오로 확인한다(먼저 `npm run build`).
 
