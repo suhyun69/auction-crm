@@ -123,3 +123,98 @@ test('SSE 수신과 재조회 요청·응답을 호출 흐름으로 알린다', 
     [['sse', 'dashboard-changed', undefined], ['refresh', 'request', undefined], ['refresh', 'response', false]]);
   assert.ok(Number.isFinite(state.traffic[2].durationMs));
 });
+
+/** graphql 모드: 가짜 GraphQL 연결(query·subscribe)로 대시보드를 만든다. */
+function graphqlSetup(t) {
+  const queries = [];
+  const subscriptions = [];
+  const link = {
+    query: signal => new Promise((resolve, reject) => {
+      queries.push({ signal, respond: resolve, fail: () => reject(new Error('offline')) });
+      signal.addEventListener('abort', () => reject(new Error('aborted')));
+    }),
+    subscribe: handlers => {
+      const subscription = { handlers, closed: false };
+      subscriptions.push(subscription);
+      return () => { subscription.closed = true; };
+    },
+  };
+  const state = { data: [], errors: [], connections: [], changed: [], loading: [], traffic: [] };
+  const client = createLiveDashboard({
+    onData: value => state.data.push(value), onError: value => state.errors.push(value),
+    onConnection: value => state.connections.push(value), onChanged: value => state.changed.push(value),
+    onLoading: value => state.loading.push(value), onTraffic: value => state.traffic.push(value),
+  }, { graphql: link });
+  t.after(() => client.dispose());
+  return { queries, subscriptions, state, client, current: () => subscriptions.at(-1).handlers };
+}
+
+test('graphql: 처음과 연결될 때 조회하고, 구독 메시지는 다시 조회하지 않고 바로 그린다', async t => {
+  const { queries, state, current } = graphqlSetup(t);
+  await tick();
+  assert.equal(queries.length, 1);
+  assert.equal(state.connections.at(-1), 'connecting');
+  current().onConnected();
+  assert.equal(state.connections.at(-1), 'connected');
+  queries[0].respond(snapshot(1)); await tick();
+  assert.equal(queries.length, 2, '연결 직후 놓친 변경이 없도록 한 번 더 읽는다');
+  queries[1].respond(snapshot(1)); await tick();
+
+  current().onData(snapshot(2));
+  current().onData(snapshot(3));
+  await tick();
+  assert.equal(queries.length, 2, '구독 메시지에는 조회하지 않는다');
+  assert.deepEqual(state.data.map(x => x.summary.bidCount), [1, 1, 2, 3]);
+  assert.deepEqual(state.changed.at(-1), [1]);
+  assert.deepEqual(state.traffic.filter(item => item.kind === 'sse'),
+    [{ kind: 'sse', name: 'dashboardChanged', protocol: 'graphql' }, { kind: 'sse', name: 'dashboardChanged', protocol: 'graphql' }]);
+  assert.ok(state.traffic.filter(item => item.kind === 'refresh').every(item => item.protocol === 'graphql'));
+});
+
+test('graphql: 조회하는 동안 더 새 구독 메시지를 그렸다면 늦게 온 조회 결과는 버린다', async t => {
+  const { queries, state, current } = graphqlSetup(t);
+  await tick();
+  current().onData(snapshot(3));
+  queries[0].respond(snapshot(2)); await tick();
+  assert.equal(state.data.at(-1).summary.bidCount, 3);
+  assert.equal(state.loading.at(-1), false);
+});
+
+test('graphql: 구독 메시지 없이 줄어든 조회 결과(DB 초기화)는 받아들인다', async t => {
+  const { queries, state, current, client } = graphqlSetup(t);
+  await tick();
+  queries[0].respond(snapshot(5)); await tick();
+  current().onClosed();
+  assert.equal(state.connections.at(-1), 'reconnecting');
+  current().onConnected(); await tick();
+  queries[1].respond(snapshot(0)); await tick();
+  assert.equal(state.data.at(-1).summary.bidCount, 0);
+  assert.ok(client);
+});
+
+test('graphql: 다시 연결하지 않는 실패는 끊김으로 알리고 retry가 새로 구독한다', async t => {
+  const { queries, subscriptions, state, current, client } = graphqlSetup(t);
+  await tick(); queries[0].respond(snapshot(1)); await tick();
+  current().onFailed();
+  assert.equal(state.connections.at(-1), 'disconnected');
+  current().onConnected();
+  assert.equal(state.connections.at(-1), 'disconnected', '실패한 구독의 늦은 신호는 무시한다');
+  client.retry(); await tick();
+  assert.equal(subscriptions.length, 2);
+  assert.equal(subscriptions[0].closed, true);
+  assert.equal(state.connections.at(-1), 'connecting');
+  current().onConnected();
+  assert.equal(state.connections.at(-1), 'connected');
+});
+
+test('graphql: dispose는 조회를 취소하고 구독을 닫으며 이후 메시지를 무시한다', async t => {
+  const { queries, subscriptions, state, client, current } = graphqlSetup(t);
+  await tick();
+  const before = JSON.stringify(state);
+  client.dispose();
+  assert.equal(queries[0].signal.aborted, true);
+  assert.equal(subscriptions[0].closed, true);
+  current().onData(snapshot(9)); current().onConnected();
+  await tick();
+  assert.equal(JSON.stringify(state), before);
+});

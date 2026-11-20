@@ -41,9 +41,11 @@ type Props = {
   onPacketDone: (id: string) => void;
   idleLanes: FlowLane[];
   badges: Partial<Record<FlowLane, number>>;
+  /** 차선 이름을 바꿀 때(예: graphql 모드의 "구독·응답") */
+  laneLabels?: Partial<Record<FlowLane, string>>;
 };
 
-export function FlowScene({ view, onView, nodes, selected, onSelect, packets, paused, reducedMotion, onPacketDone, idleLanes, badges }: Props) {
+export function FlowScene({ view, onView, nodes, selected, onSelect, packets, paused, reducedMotion, onPacketDone, idleLanes, badges, laneLabels = {} }: Props) {
   const stage = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const drag = useRef<{ x: number; y: number; view: View; moved: boolean; pointer: number } | null>(null);
@@ -103,7 +105,8 @@ export function FlowScene({ view, onView, nodes, selected, onSelect, packets, pa
       <div className="flow-world" style={worldStyle}>
         <div className="flow-floor" aria-hidden="true" onClick={() => onSelect(null)} />
         {(Object.keys(LANES) as FlowLane[]).map(lane => {
-          const { x, from, to, label } = LANES[lane];
+          const { x, from, to } = LANES[lane];
+          const label = laneLabels[lane] ?? LANES[lane].label;
           const up = to < from;
           const badge = badges[lane];
           return <div key={lane} aria-hidden="true">

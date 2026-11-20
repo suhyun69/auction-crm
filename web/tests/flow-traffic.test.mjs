@@ -87,3 +87,10 @@ test('응답은 같은 호출의 요청 패킷이 도착한 뒤 출발한다', (
   const web = [fromWebEntry({ id: 1, at: 0, kind: 'refresh', direction: 'request' }), fromWebEntry({ id: 2, at: 1, kind: 'refresh', direction: 'response', ok: true, durationMs: 1 })];
   assert.equal(web[0].pair, web[1].pair);
 });
+
+test('graphql 모드의 브라우저 기록은 protocol을 그대로 넘긴다', () => {
+  const push = fromWebEntry({ id: 1, at: 0, kind: 'sse', name: 'dashboardChanged', protocol: 'graphql' });
+  const query = fromWebEntry({ id: 2, at: 1, kind: 'refresh', direction: 'request', protocol: 'graphql' });
+  assert.deepEqual([push.lane, push.protocol, query.lane, query.protocol], ['api-web', 'graphql', 'web-api', 'graphql']);
+  assert.equal(fromWebEntry({ id: 3, at: 2, kind: 'sse', name: 'ready' }).protocol, undefined);
+});

@@ -10,6 +10,8 @@
     "test": "tsc src/lib/dashboard/live-dashboard.ts src/lib/dashboard/api.ts src/lib/dashboard/types.ts --module commonjs --target es2022 --outDir .test-build --skipLibCheck && tsc src/lib/simulator/client.ts src/lib/simulator/types.ts src/lib/simulator/request.ts src/lib/simulator/setup.ts src/lib/simulator/history.ts --module commonjs --target es2022 --outDir .test-build/simulator --skipLibCheck && tsc src/lib/flow/traffic.ts --module commonjs --target es2022 --outDir .test-build/flow --skipLibCheck && node --test tests/*.test.mjs"
   },
   "dependencies": {
+    "graphql": "^16.15.0",
+    "graphql-ws": "^6.4.3",
     "next": "16.4.6",
     "react": "19.3.0",
     "react-dom": "19.3.0"
