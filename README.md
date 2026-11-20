@@ -4,20 +4,28 @@
 
 ## 구성과 환경
 
-- `api/`: Java 21, Spring Boot, JPA, PostgreSQL(개발, Docker), 인메모리 H2(자동 테스트). 기존 헥사고날 구조와 ArchUnit 규칙을 유지한다.
+- `api2/`: **기본 API.** NestJS 12, Fastify, MikroORM(PostgreSQL), Zod, Mercurius(GraphQL). 응찰·대시보드 REST, 변경 알림 SSE, GraphQL 조회·응찰·구독을 제공한다. Spring에서 옮기며 익힌 내용은 [api2/README.md](api2/README.md)의 학습 노트에 있다.
+- `api/`: Java 21, Spring Boot, JPA, PostgreSQL(개발, Docker), 인메모리 H2(자동 테스트). 기존 헥사고날 구조와 ArchUnit 규칙을 유지한다. api2와 같은 REST·SSE 계약이며 `API_IMPL=api`로 고른다.
 - `web/`: Next.js App Router, React, TypeScript, Tailwind CSS.
 - `plan.md`, `ticket/`: API 계약·작업 범위·티켓별 검증 및 병합 기록.
 - `AGENTS.md`, `.codex/agents/`: 루트와 web/api 담당자의 작업 지침.
 
-JDK 21, Node.js 20.9 이상, npm, Docker(Compose v2 포함, 예: Docker Desktop)가 필요하다. 실제 검증 환경은 JDK 21.0.10 / Node 26.8.1 / npm 11.19.0이다. Gradle은 저장소 wrapper를 사용하고 웹 의존성은 npm lockfile로 설치한다. 통합 검증 스크립트는 Python 3.9 이상 표준 라이브러리만 사용한다.
+Node.js 22 이상, npm, Docker(Compose v2 포함, 예: Docker Desktop)가 필요하다. Spring `api/`를 실행할 때만 JDK 21이 필요하다. 실제 검증 환경은 JDK 21.0.10 / Node 26.8.1 / npm 11.19.0이다. Gradle은 저장소 wrapper를 사용하고 웹 의존성은 npm lockfile로 설치한다. 통합 검증 스크립트는 Python 3.9 이상 표준 라이브러리만 사용한다.
 
 ## 로컬 실행
 
-저장소 루트에서 웹 의존성을 처음 한 번 설치한 뒤 다음 명령으로 Docker·PostgreSQL·API·웹을 함께 실행한다. Docker가 꺼져 있으면 Docker Desktop을 자동으로 켜고 준비될 때까지 기다린다(기본 120초, `DOCKER_START_TIMEOUT_MS`로 조정).
+저장소 루트에서 api2·웹 의존성을 처음 한 번 설치한 뒤 다음 명령으로 Docker·PostgreSQL·API·웹을 함께 실행한다. Docker가 꺼져 있으면 Docker Desktop을 자동으로 켜고 준비될 때까지 기다린다(기본 120초, `DOCKER_START_TIMEOUT_MS`로 조정).
 
 ```bash
+npm --prefix api2 ci
 npm --prefix web ci
 npm run dev
+```
+
+API는 기본으로 api2이고, 웹 대시보드는 GraphQL(조회 + 구독)로 연결한다. Spring `api/`로 실행하면 웹은 REST·SSE로 연결한다. 직접 지정한 `NEXT_PUBLIC_API_PROTOCOL`(`graphql`·`rest`)은 이 기본값보다 우선한다.
+
+```bash
+API_IMPL=api npm run dev
 ```
 
 `npm run dev`는 루트 [`compose.yaml`](compose.yaml)의 PostgreSQL 컨테이너를 먼저 제거하고 새로 만든 뒤 API와 웹을 띄운다. DB 데이터는 컨테이너의 tmpfs에만 있으므로 **실행할 때마다 빈 DB에서 시작**한다. Ctrl+C로 두 서버와 자식 프로세스, DB 컨테이너를 함께 정리한다. 한 서버가 실패하거나 종료돼도 다른 서버를 종료한다. 통합 명령은 macOS/Linux에서 동작하며 추가 npm 패키지는 필요 없다. macOS에서 `JAVA_HOME`이 없으면 설치된 JDK 21을 자동으로 선택한다.
@@ -28,14 +36,20 @@ npm run dev
 API_PORT=8081 WEB_PORT=3001 DB_PORT=5433 npm run dev
 ```
 
-`NEXT_PUBLIC_API_ORIGIN`이나 `AUCTION_WEB_ALLOWED_ORIGINS`를 명령 실행 환경에서 직접 지정하면 그 값을 우선한다. 통합 실행의 웹 API 주소는 `.env.local`보다 우선한다. Turbopack 사용이 제한된 환경에서는 `npm run dev -- --webpack`으로 실행한다. 두 서버 로그는 `[api]`, `[web]` 접두사로 구분한다.
+`NEXT_PUBLIC_API_ORIGIN`이나 `AUCTION_WEB_ALLOWED_ORIGINS`를 명령 실행 환경에서 직접 지정하면 그 값을 우선한다. 통합 실행의 웹 API 주소는 `.env.local`보다 우선한다. Turbopack 사용이 제한된 환경에서는 `npm run dev -- --webpack`으로 실행한다. 두 서버 로그는 `[api]`, `[web]` 접두사로 구분한다. api2는 `nest start --watch`로 실행되어 코드가 바뀌면 다시 시작하고, 시작할 때 마이그레이션을 적용한다.
 
 ### Docker Compose로 전부 실행
 
-JDK·Node 없이 Docker만으로 DB·API·웹을 모두 컨테이너로 실행할 수도 있다. Docker를 켠 상태에서 저장소 루트에서 실행한다. 코드 수정은 즉시 반영되지 않으며, 바꾼 뒤 다시 실행하면 `--build`가 이미지를 새로 만든다. 첫 빌드는 Gradle·npm 의존성 다운로드로 몇 분 걸린다.
+JDK·Node 없이 Docker만으로 DB·API·웹을 모두 컨테이너로 실행할 수도 있다. Docker를 켠 상태에서 저장소 루트에서 실행한다. 코드 수정은 즉시 반영되지 않으며, 바꾼 뒤 다시 실행하면 `--build`가 이미지를 새로 만든다. 첫 빌드는 npm 의존성 다운로드로 몇 분 걸린다. API는 api2, 웹 대시보드 연결은 GraphQL이다.
 
 ```bash
 docker compose up --build
+```
+
+Spring `api/`로 실행하려면 API와 웹 연결 방식을 함께 지정한다(GraphQL은 api2 전용).
+
+```bash
+API_IMPL=api NEXT_PUBLIC_API_PROTOCOL=rest docker compose up --build
 ```
 
 Ctrl+C로 멈추고, 컨테이너까지 지우려면 `docker compose down`을 실행한다. DB는 tmpfs에 있으므로 멈췄다가 다시 시작해도 빈 DB로 시작한다. 포트는 `API_PORT=8081 WEB_PORT=3001 DB_PORT=5433 docker compose up --build`처럼 바꾸며, 웹 API 주소와 CORS 원점도 함께 맞춰진다. 웹 API 주소는 빌드할 때 이미지에 들어가므로 `API_PORT`를 바꾸면 `--build`가 필요하다.
@@ -50,20 +64,22 @@ npm run db:up
 ```
 
 ```bash
-# API 터미널
-cd api
-./gradlew bootRun
+# API 터미널 (api2)
+cd api2
+npm run start:dev
+# Spring으로 실행할 때: cd api && ./gradlew bootRun
 ```
 
 ```bash
-# 웹 터미널
+# 웹 터미널 (api2와 GraphQL로 연결. Spring이면 rest)
 cd web
-npm run dev
+NEXT_PUBLIC_API_PROTOCOL=graphql npm run dev
 ```
 
 - 대시보드: [http://localhost:3000](http://localhost:3000)
 - API 요약: [http://localhost:8080/api/dashboard](http://localhost:8080/api/dashboard)
-- Swagger: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+- Swagger: api2 [http://localhost:8080/swagger-ui](http://localhost:8080/swagger-ui), Spring [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+- GraphiQL(api2): [http://localhost:8080/graphiql](http://localhost:8080/graphiql)
 
 최초에는 0건과 빈 참가자 목록을 표시한다. 아래 POST 예제를 실행하면 새로고침 없이 카드와 순위가 바뀐다. 화면에는 응찰 입력 폼이 없으며 외부 시스템이 API로 응찰한다.
 
@@ -150,10 +166,13 @@ curl -N http://localhost:8080/api/events
 
 | 설정 | 기본값 | 의미 |
 |---|---|---|
+| 통합 실행 `API_IMPL` | `api2` | 띄울 API: `api2`(NestJS) 또는 `api`(Spring) |
 | 웹 `NEXT_PUBLIC_API_ORIGIN` | `http://localhost:8080` | 브라우저에서 접근할 API 원점 |
-| API `SERVER_PORT` | `8080` | API 포트 |
+| 웹 `NEXT_PUBLIC_API_PROTOCOL` | 통합 실행: api2면 `graphql`, api면 `rest` / 웹 단독: `rest` | 대시보드 연결 방식. `graphql`은 api2 전용 |
+| api2 `PORT` / Spring `SERVER_PORT` | `8080` | API 포트 |
 | `DB_PORT` | `5432` | 호스트에 공개할 PostgreSQL 포트(compose와 API가 함께 사용) |
-| API `DB_URL` | `jdbc:postgresql://localhost:${DB_PORT}/auction` | DB URL |
+| api2 `DB_HOST` / `DB_NAME` | `localhost` / `auction` | DB 호스트·이름 |
+| Spring `DB_URL` | `jdbc:postgresql://localhost:${DB_PORT}/auction` | DB URL |
 | API `DB_USERNAME` / `DB_PASSWORD` | `auction` / `auction` | 개발 DB 계정 |
 | API `AUCTION_WEB_ALLOWED_ORIGINS` | `http://localhost:3000` | 허용 웹 원점, 여러 값은 쉼표로 구분 |
 | API `AUCTION_EVENTS_HEARTBEAT_MS` | `15000` | SSE heartbeat 간격 |
@@ -164,6 +183,15 @@ curl -N http://localhost:8080/api/events
 worktree마다 API/웹/DB 포트를 분리한다. Compose 프로젝트 이름도 worktree마다 달라야 컨테이너가 겹치지 않는다. 예: `COMPOSE_PROJECT_NAME=auction-crm-007 API_PORT=8081 WEB_PORT=3001 DB_PORT=5433 npm run dev`. 이 경우 웹 API 원점은 8081, API 허용 웹 원점은 `http://localhost:3001`로 자동 설정된다.
 
 ## 자동 검증
+
+```bash
+cd api2
+npm ci
+npm run lint
+npm run build
+npm test
+npm run test:e2e   # Docker로 PostgreSQL을 띄운다(Testcontainers)
+```
 
 ```bash
 cd api
@@ -184,10 +212,11 @@ npm run build -- --webpack
 저장소 루트에서 실행하는 다음 스크립트는 별도 포트·임시 PostgreSQL 컨테이너·자체 API 프로세스를 사용한다(Docker 필요). 개발 DB에 접근하지 않고 종료 시 컨테이너를 제거한다.
 
 ```bash
-python3 scripts/verify_acceptance.py
+python3 scripts/verify_acceptance.py              # api2 (먼저 cd api2 && npm run build)
+python3 scripts/verify_acceptance.py --impl api   # Spring (먼저 cd api && ./gradlew bootJar)
 ```
 
-검증 내용: 승인·기각·재응찰, 이름 정규화, 입력 오류, 멱등 재송신·409 충돌, 동시 응찰 20회, 동일 키 동시 요청 10회, 두 SSE 연결에 신규 기록 이벤트만 25회 전달, 서버 재시작 후 동일한 요약·순위·시각·최초 응답 보존. API JAR 경로를 바꾸려면 `--jar /absolute/path/app.jar`를 지정한다.
+검증 내용: 승인·기각·재응찰, 이름 정규화, 입력 오류, 멱등 재송신·409 충돌, 동시 응찰 20회, 동일 키 동시 요청 10회, 두 SSE 연결에 신규 기록 이벤트만 25회 전달, 서버 재시작 후 동일한 요약·순위·시각·최초 응답 보존. Spring API JAR 경로를 바꾸려면 `--impl api --jar /absolute/path/app.jar`를 지정한다.
 
 ## 브라우저 수용 검증 절차
 

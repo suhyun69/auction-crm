@@ -1,6 +1,8 @@
 # 실행 방법 두 가지
 # - `npm run dev`: 이 파일의 db만 띄우고 API·웹은 로컬 개발 서버로 실행한다(코드 수정 즉시 반영).
 # - `docker compose up --build`: db·api·web을 모두 컨테이너로 실행한다(JDK·Node 설치 불필요).
+# API는 기본으로 api2(NestJS)이고 web은 GraphQL로 연결한다. Spring으로 실행하려면:
+#   API_IMPL=api NEXT_PUBLIC_API_PROTOCOL=rest docker compose up --build
 # DB 데이터는 tmpfs에만 있어 컨테이너가 멈추거나 다시 만들어지면 항상 빈 DB로 시작한다.
 name: auction-crm
 
@@ -22,12 +24,17 @@ services:
       retries: 30
 
   api:
-    build: ./api
+    # api2(NestJS, 기본) 또는 api(Spring). 둘 다 8080에서 같은 REST·SSE 계약을 제공한다.
+    build: ./${API_IMPL:-api2}
     depends_on:
       db:
         condition: service_healthy
     environment:
+      # Spring(api)은 DB_URL을, api2는 DB_HOST·DB_PORT·DB_NAME을 읽는다. 각자 쓰지 않는 값은 무시한다.
       DB_URL: jdbc:postgresql://db:5432/auction
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: auction
       DB_USERNAME: auction
       DB_PASSWORD: auction
       AUCTION_WEB_ALLOWED_ORIGINS: http://localhost:${WEB_PORT:-3000}
@@ -43,6 +50,8 @@ services:
       args:
         # 브라우저가 호스트에서 API에 접근하므로 호스트 기준 주소를 빌드에 넣는다.
         NEXT_PUBLIC_API_ORIGIN: http://localhost:${API_PORT:-8080}
+        # 대시보드 연결 방식. graphql은 api2 전용이므로 API_IMPL=api이면 rest로 지정한다.
+        NEXT_PUBLIC_API_PROTOCOL: ${NEXT_PUBLIC_API_PROTOCOL:-graphql}
     environment:
       # 시뮬레이터는 웹 서버(컨테이너 안)에서 API를 호출하므로 컨테이너 네트워크 주소를 쓴다.
       SIMULATOR_API_ORIGIN: http://api:8080

@@ -3,8 +3,8 @@
 
 Uses only Python's standard library and a throwaway PostgreSQL container
 (tmpfs data, removed afterwards), never the `npm run dev` database. Docker is required.
-Spring API (default): cd api && ./gradlew bootJar, then python3 scripts/verify_acceptance.py
-NestJS api2: cd api2 && npm run build, then python3 scripts/verify_acceptance.py --impl api2
+NestJS api2 (default): cd api2 && npm run build, then python3 scripts/verify_acceptance.py
+Spring API: cd api && ./gradlew bootJar, then python3 scripts/verify_acceptance.py --impl api
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -118,8 +118,8 @@ def stop_postgres(container):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--impl', choices=['api', 'api2'], default='api',
-                        help='api: Spring Boot jar (default), api2: NestJS build in api2/dist')
+    parser.add_argument('--impl', choices=['api', 'api2'], default='api2',
+                        help='api2: NestJS build in api2/dist (default), api: Spring Boot jar')
     parser.add_argument('--jar', type=Path, help='Built Spring Boot executable jar')
     args = parser.parse_args()
     if args.impl == 'api2':

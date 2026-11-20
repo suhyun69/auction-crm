@@ -54,6 +54,7 @@ Git 수행 권한: 기본은 소스 수정과 검증만, 커밋·병합은 루�
 ## 검증 기준
 
 - API: 변경에 맞는 테스트와 `cd api && ./gradlew test`. 계층 변경은 ArchUnit 검사도 확인한다.
+- api2: `cd api2 && npm run lint && npm run build && npm test && npm run test:e2e`(Docker 필요). 계약이 바뀌면 `python3 scripts/verify_acceptance.py`(기본 api2)도 실행한다.
 - Web: `cd web && npm run lint`, `npx --no-install tsc --noEmit`, `npm run build`. 화면 변경은 해당 화면의 데스크톱·모바일 동작을 확인한다.
 - 환경 제한으로 실패한 검증은 성공으로 기록하지 않는다. 공통 API 계약은 `plan.md`와 구현/OpenAPI가 일치하도록 루트가 조율한다.
 - 서브에이전트는 루트 오케스트레이터 절차를 재귀 실행하거나 하위 에이전트를 생성하지 않는다.
