@@ -139,3 +139,11 @@ SSE 연결 준비 시 `ready`, 새 응찰 커밋 후 `dashboard-changed`, 유휴
 
 - [013-call-flow-visualizer.md](ticket/013-call-flow-visualizer.md): 대시보드를 왼쪽 절반, Simulation Engine·API·Web 사이 호출을 CSS 3D 그림으로 재생하는 패널을 오른쪽 절반에 둔다.
 - 세션이 엔진의 API 클라이언트를 감싸 호출 기록(`run.traffic`)을 스냅샷으로 내보내고, 브라우저가 SSE 수신과 대시보드 재조회를 더한다. 엔진 코어와 기존 `events`·API는 바꾸지 않는다.
+
+## 추가 티켓: api2 (NestJS로 옮긴 API)
+
+- `api/`(Spring)를 그대로 두고, 시뮬레이션 엔진과 web이 쓰는 기능만 NestJS 12 · Fastify · MikroORM · Zod · Mercurius(GraphQL)로 다시 만든 `api2/`로 연결을 바꾼다. NestJS 학습이 목적이라 커뮤니티의 기능별 모듈 구조를 따르고 `api2/README.md`에 학습 노트를 남긴다.
+- 엔진은 REST 응찰, web은 GraphQL 조회·구독(rest 모드도 유지)을 쓴다. REST·SSE 계약은 `api/`와 같다.
+- [015-api2-foundation.md](ticket/015-api2-foundation.md): 프로젝트 기반(Fastify, Zod 설정, MikroORM 엔티티·마이그레이션, 경매 초기화).
+- 016 REST 응찰·대시보드, 017 SSE, 018 GraphQL, 019 web GraphQL 연결, 020 연결 전환.
+
